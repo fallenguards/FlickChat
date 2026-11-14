@@ -139,7 +139,7 @@ ns.EN = {
     NOTICE_STYLE = "FlickChat cannot work with the Classic chat style: with it the game's controller mode never shows chat's typing line, so the keyboard cannot open. Switch to the IM style to use FlickChat. FlickChat can still give you Classic style's look by hiding the typing line itself: a check box for that appears here once you have switched.",
     OPT_HIDE_LINE = "Hide the typing line until chat opens, as Classic style does",
     NOTICE_KEY_CLOSE = "%s closes",
-    NOTICE_SIZE_NOTE = "The keyboard under this window shows the size. You can change it any time in FlickChat's settings: open the keyboard's wheel and turn to its last page.",
+    NOTICE_SIZE_NOTE = "The keyboard under this window shows the size and shape. You can change both any time in FlickChat's settings: open the keyboard's wheel and turn to its last page.",
     NOTICE_SIZE = "Keyboard size: %d%%",
     NOTICE_WELCOME = "FlickChat puts a keyboard beside chat for your controller. Open chat from the game's controller menu and a short lesson shows you how it works.",
     NOTICE_SWAP = "Switch to IM style now",
@@ -185,4 +185,12 @@ ns.EN = {
     NEWS_LANGUAGES = "now also guesses words in %s. It follows your game's language; to type in another, change Typing"
         .. " language in FlickChat's settings, on the last page of the keyboard's wheel.",
     UPDATE_OUT = "version %s is out (you have %s). Update in the CurseForge app, or at %s",
+    OPT_SHAPE = "Keyboard shape",
+    SHAPE_WIDE = "Wide",
+    SHAPE_ABOVE = "Words on top",
+    SHAPE_BELOW = "Words below",
+    OPT_SHAPE_TIP = "Words on top and Words below stack the guess words with the letters: a narrower, taller keyboard.",
+    OPT_WORD_ROOM_STACKED = "Stacked, the words already have the keyboard's whole width: this changes the wide shape.",
+    NOTICE_SHAPE = "Keyboard shape: %s",
+    NOTICE_SHAPE_TURN = "Change",
 }

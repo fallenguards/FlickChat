@@ -162,7 +162,11 @@ local function Obj(parent)
         if k == "CreateTexture" or k == "CreateFontString" or k == "CreateMaskTexture" then
             return function(self) local c = Obj(self) c.shown = true return c end
         end
-        if k:match("^%u") then return function() end end
+        -- any other method of the game's: there on every frame, and it wants its frame (a field of ours named
+        -- like one, called with a dot, is an error in the game)
+        if k:match("^%u") then
+            return function(self) assert(type(self) == "table", k .. " called without its frame") end
+        end
     end })
 end
 function CreateSettingsButtonInitializer() return {} end
@@ -385,8 +389,29 @@ ns.db.welcomed = nil
 ns.events.scripts.OnEvent(ns.events, "PLAYER_LOGIN")
 Is("a new player gets the window", _G.FlickChatNotice ~= nil and _G.FlickChatNotice.shown, true)
 Is("with the keyboard as the preview", kb.shown, true)
+-- Y in the window turns the keyboard's shape, the preview with it
+local notice = _G.FlickChatNotice
+local wideW, wideH = kb.w, kb.h
+notice.scripts.OnGamePadButtonDown(notice, "PAD4")
+Is("Y in the window stacks the keyboard, the guess words on top", ns.db.shape, "above")
+Is("narrower and taller", kb.w < wideW and kb.h > wideH, true)
+local stackedW, stackedH = kb.w, kb.h
+notice.scripts.OnGamePadButtonDown(notice, "PAD4")
+Is("Y again puts the words below, the same size", ns.db.shape == "below" and kb.w == stackedW and kb.h == stackedH, true)
+notice.scripts.OnGamePadButtonDown(notice, "PAD4")
+Is("and once more it is wide again, with no pick kept", ns.db.shape == nil and kb.w == wideW and kb.h == wideH, true)
 generic.Hide(_G.FlickChatNotice)
 Is("closing it puts the preview away", kb.shown, false)
+-- the preview under any other window, one with no way up of its own: it hangs there and nothing is asked of it
+local plain = Obj(UIParent)
+ns.PreviewKeyboard(plain)
+Is("the preview hangs under a plain window too", kb.shown, true)
+ns.db.shape = "above"
+ns.Restyle()
+Is("and takes a new shape there", kb.h > wideH, true)
+ns.db.shape = nil
+ns.PreviewKeyboard()
+Is("and goes when asked", kb.shown, false)
 Is("and it is not shown twice", ns.db.welcomed, true)
 
 -- the settings are a window of the addon's own, worked by the pad; nothing goes on the game's Settings window
@@ -421,6 +446,24 @@ for _ = 1, 7 do own.scripts.OnGamePadButtonDown(own, "PADDDOWN") end
 own.scripts.OnGamePadButtonDown(own, "PADDRIGHT")
 Is("d-pad down to the size, right adds to it", ns.db.size, size + 5)
 own.scripts.OnGamePadButtonDown(own, "PADDLEFT")
+-- the shape is the row under the size; stacked, the word room row under it says why it changes nothing
+own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
+own.scripts.OnGamePadButtonDown(own, "PAD1")
+Is("A on the next row turns the keyboard's shape", ns.db.shape, "above")
+Is("the row names it", ns.ShapeName(), "Words on top")
+own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
+Has("stacked, the word room row says it is the wide shape's", own.tip.text, "wide shape")
+own.scripts.OnGamePadButtonDown(own, "PADDUP")
+own.scripts.OnGamePadButtonDown(own, "PAD1")
+Is("A again puts the words below", ns.ShapeName(), "Words below")
+own.scripts.OnGamePadButtonDown(own, "PAD1")
+Is("and once more it is wide", ns.db.shape, nil)
+-- a shape this version does not know (a saved pick from another build) is the wide one
+ns.db.shape = "stacked"
+Is("an unknown saved shape reads as wide", ns.ShapeName(), "Wide")
+ns.db.shape = nil
+own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
+Is("wide, that row has nothing to add", own.tip.text, "")
 own.scripts.OnGamePadButtonDown(own, "PAD2")
 Is("B shuts it", own.shown, false)
 
@@ -613,6 +656,35 @@ Press("PAD1")
 Is("a French word on the vowels layout", sent[#sent], "Merci")
 Press("PAD2")
 ns.db.language, ns.db.layout = nil, "letters"
+-- by a chat window: stacked, the keyboard's bottom corner on the chat window's own (the messages', not the typing
+-- line under them); wide, by the typing line as before
+local chatWindow = Obj(UIParent)
+local chatBox = Obj(chatWindow)
+chatBox.chatFrame = chatWindow
+local placed
+kb.SetPoint = function(_, ...) placed = { ... } end
+for _, shape in ipairs({ "above", "below" }) do
+    ns.db.shape = shape
+    T.PlaceBy(chatBox)
+    Is("words " .. shape .. ": the keyboard's bottom left on the chat window's bottom right", placed[1] == "BOTTOMLEFT"
+        and placed[2] == chatWindow and placed[3] == "BOTTOMRIGHT" and placed[5] == (ns.db.moveY or 0), true)
+end
+ns.db.shape = nil
+T.PlaceBy(chatBox)
+Is("wide: by the typing line as before", placed[1] == "BOTTOMLEFT" and placed[2] == chatBox and placed[3] == "TOPRIGHT", true)
+kb.SetPoint = nil
+-- the stacked shapes type as the wide one does (the letters layout back first: the lines above left the other on)
+for _, shape in ipairs({ "above", "below" }) do
+    ns.db.shape = shape
+    ns.Relayout()
+    Open()
+    Type("hello")
+    Press("PAD1")
+    Is("typing is the same with the words " .. shape, sent[#sent], "Hello")
+    Press("PAD2")
+end
+ns.db.shape = nil
+ns.Restyle()
 -- a Latin American Spanish game types with Spanish's words, and Spanish there is the game's own, no pick
 ns.locale = "esMX"
 Is("a Latin American Spanish game types Spanish", ns.WantedLanguage(), "esES")

@@ -22,7 +22,9 @@ local function Specs()
     local list = {}
     local function Head(text) list[#list + 1] = { head = text } end
     local function Check(key, label) list[#list + 1] = { check = R[key], label = label } end
-    local function Slider(key, label, low, high) list[#list + 1] = { slider = R[key], label = label, low = low, high = high } end
+    local function Slider(key, label, low, high, tip)
+        list[#list + 1] = { slider = R[key], label = label, low = low, high = high, tip = tip }
+    end
     local function Button(label, text, press, tip) list[#list + 1] = { press = press, label = label, text = text, tip = tip } end
     Head(L["OPT_HEAD_OPTIONS"])
     Button(L["OPT_LANGUAGE"], ns.LanguageName, function() ns.NextLanguage() end, L["OPT_LANGUAGE_TIP"])
@@ -35,7 +37,9 @@ local function Specs()
     Check("stickTips", L["OPT_STICK_TIPS"])
     Head(L["OPT_HEAD_SIZE"])
     Slider("size", L["OPT_SIZE"], 70, 200)
-    Slider("wordRoom", L["OPT_WORD_ROOM"], 70, 160)
+    Button(L["OPT_SHAPE"], ns.ShapeName, function() ns.NextShape() end, L["OPT_SHAPE_TIP"])
+    -- stacked, the words have the keyboard's whole width already: the row says why it changes nothing
+    Slider("wordRoom", L["OPT_WORD_ROOM"], 70, 160, function() return ns.Stacked() and L["OPT_WORD_ROOM_STACKED"] or "" end)
     Slider("wheelSize", L["OPT_WHEEL_SIZE"], 50, 150)
     Button(L["OPT_MOVE"], L["OPT_MOVE_BUTTON"], function(well) ns.MoveNext(well) end, L["OPT_MOVE_TIP"])
     Head(L["OPT_HEAD_PRACTICE"])
@@ -70,7 +74,9 @@ local function Refresh()
         row.lit:SetShown(i == focus)
     end
     local spec = specs[focus]
-    window.tip:SetText(spec and spec.tip or "")
+    local tip = spec and spec.tip
+    if type(tip) == "function" then tip = tip() end
+    window.tip:SetText(tip or "")
 end
 
 -- The focused row kept in sight.

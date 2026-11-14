@@ -436,6 +436,30 @@ local ROWS = {
 }
 ns.optionRows = ROWS
 
+-- The keyboard's shape: wide (a stick either side of the guess words, no pick saved), or stacked, the sticks side
+-- by side with the words over them ("above") or under them ("below").
+function ns.Stacked()
+    local shape = ns.db.shape
+    return (shape == "above" or shape == "below") and shape or nil
+end
+
+function ns.ShapeName()
+    local shape = ns.Stacked()
+    return ns.L[shape == "above" and "SHAPE_ABOVE" or shape == "below" and "SHAPE_BELOW" or "SHAPE_WIDE"]
+end
+
+function ns.NextShape()
+    local shape = ns.Stacked()
+    if shape == "above" then
+        ns.db.shape = "below"
+    elseif shape == "below" then
+        ns.db.shape = nil
+    else
+        ns.db.shape = "above"
+    end
+    if ns.Restyle then ns.Restyle() end
+end
+
 -- The player's own words for the guesses: letters and apostrophes, a space between, each once.
 function ns.SetMyWords(text)
     local seen, list = {}, {}
@@ -516,7 +540,12 @@ function ns.StyleNotice()
         notice:Hide()
         notice:SetFrameStrata("FULLSCREEN_DIALOG")
         notice:SetSize(520, 10)
-        notice:SetPoint("CENTER", 0, 150)
+        -- up from its place by what the keyboard under it needs (the keyboard's preview asks)
+        local function Lift(by)
+            notice:ClearAllPoints()
+            notice:SetPoint("CENTER", 0, 150 + by)
+        end
+        Lift(0)
         notice:EnableMouse(true)
         ns.Dress(notice)
         local EDGE = 24
@@ -579,7 +608,14 @@ function ns.StyleNotice()
         local plus = Step("FlickChatNoticeLarger", "+", 10, minus)
         local larger = Text()
         larger:SetPoint("LEFT", plus, "RIGHT", 6, 0)
-        local note = Line(size, 14, "GameFontDisableSmall")
+        -- The keyboard's shape under the size, the same way: its name, Y, the button that turns to the other.
+        local shape = Text("GameFontNormal")
+        shape:SetPoint("TOPLEFT", size, "BOTTOMLEFT", 0, -14)
+        local shapeKey = Text()
+        shapeKey:SetPoint("LEFT", shape, "RIGHT", 14, 0)
+        local turn = CreateFrame("Button", "FlickChatNoticeShape", notice, "UIPanelButtonTemplate")
+        turn:SetPoint("LEFT", shapeKey, "RIGHT", 6, 0)
+        local note = Line(shape, 14, "GameFontDisableSmall")
         note:SetText(L["NOTICE_SIZE_NOTE"])
         -- The hide-line box, X at the end of its line.
         local check = CreateFrame("CheckButton", "FlickChatNoticeCheck", notice, "UICheckButtonTemplate")
@@ -621,6 +657,10 @@ function ns.StyleNotice()
             size:SetText(L["NOTICE_SIZE"]:format(ns.db.size or 100))
             smaller:SetText(Glyph("PADLSHOULDER"))
             larger:SetText(Glyph("PADRSHOULDER"))
+            shape:SetText(L["NOTICE_SHAPE"]:format(ns.ShapeName()))
+            shapeKey:SetText(Glyph("PAD4"))
+            turn:SetText(L["NOTICE_SHAPE_TURN"])
+            turn:SetSize(turn:GetFontString():GetStringWidth() + 28, 22)
             -- X right after the box's sentence
             label:SetText(L["OPT_HIDE_LINE"] .. "  " .. Glyph("PAD3"))
             swap:SetText(L["NOTICE_SWAP"] .. "   " .. Glyph("PAD1"))
@@ -639,12 +679,16 @@ function ns.StyleNotice()
                 warn:SetTextColor(0.4, 0.9, 0.4)
             end
             local height = 22 + title:GetStringHeight() + 12 + text:GetStringHeight() + 18 + size:GetStringHeight() + 14
-                + note:GetStringHeight()
+                + shape:GetStringHeight() + 14 + note:GetStringHeight()
             if section then height = height + 16 + 1 + 14 + warn:GetStringHeight() + (classic and 14 + 36 or 0) end
             if not classic then height = height + 10 + 32 + math.max(0, label:GetStringHeight() - 18) end
             notice:SetHeight(height + 22)
             return classic
         end
+        turn:SetScript("OnClick", function()
+            ns.NextShape()
+            Tell()
+        end)
         swap:SetScript("PostClick", function()
             C_Timer.After(0.3, function()
                 if not notice:IsShown() then return end
@@ -657,7 +701,7 @@ function ns.StyleNotice()
         -- window took never reaches it (measured). The game's controller mode sets its own pad bindings over
         -- ours as it goes, so ours go back whenever it does. On IM style the window reads the pad itself.
         local BOUND = { PAD1 = "FlickChatNoticeSwap", PAD2 = "FlickChatNoticeClose", PADLSHOULDER = "FlickChatNoticeSmaller",
-            PADRSHOULDER = "FlickChatNoticeLarger" }
+            PADRSHOULDER = "FlickChatNoticeLarger", PAD4 = "FlickChatNoticeShape" }
         local function Bind()
             notice.binding = true
             for key, button in pairs(BOUND) do SetOverrideBindingClick(notice, true, key, button) end
@@ -696,6 +740,8 @@ function ns.StyleNotice()
             elseif button == "PAD3" then
                 check:SetChecked(not check:GetChecked())
                 check:GetScript("OnClick")(check)
+            elseif button == "PAD4" then
+                turn:GetScript("OnClick")(turn)
             elseif button == "PAD2" then
                 self:Hide()
             end
@@ -705,7 +751,7 @@ function ns.StyleNotice()
             self.switched = false
             check:SetChecked(ROWS.hideLine[1]())
             self.Pad(true)
-            if ns.PreviewKeyboard then ns.PreviewKeyboard(self) end
+            if ns.PreviewKeyboard then ns.PreviewKeyboard(self, Lift) end
         end)
         notice:SetScript("OnHide", function(self)
             ns.db.welcomed = true

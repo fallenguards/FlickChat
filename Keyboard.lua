@@ -1589,13 +1589,17 @@ local function PaintPrompts()
     local capsText = L[S.capsLock and "CAPS_LOCKED" or "CAPS_TIP"]
     if caps.plain then capsText = caps.plain .. " " .. capsText end
     caps.label:SetText(capsText)
-    if toggle.over ~= over then
+    -- Over a keyboard too narrow for both on one line (the stacked shape at a small size): the left one a line up.
+    local room = kb:GetWidth() * kb:GetEffectiveScale() / kb.hints:GetEffectiveScale()
+    local two = over == kb
+        and caps.label:GetStringWidth() + toggle.label:GetStringWidth() + 2 * (GUIDE_ICON + LABEL_GAP) + 28 > room
+    if toggle.over ~= over or toggle.two ~= two then
         toggle.label:ClearAllPoints()
         toggle.label:SetPoint("BOTTOMRIGHT", over, "TOPRIGHT", -6, TOGGLE_GAP)
         -- The label is what stands on the line, as the right one's does; the icon hangs on it.
         caps.label:ClearAllPoints()
-        caps.label:SetPoint("BOTTOMLEFT", over, "TOPLEFT", 6 + GUIDE_ICON + LABEL_GAP, TOGGLE_GAP)
-        toggle.over = over
+        caps.label:SetPoint("BOTTOMLEFT", over, "TOPLEFT", 6 + GUIDE_ICON + LABEL_GAP, TOGGLE_GAP + (two and 18 or 0))
+        toggle.over, toggle.two = over, two
     end
     -- Both reminders go with the player's box on the settings page.
     local tips = not ns.db.stickTipsOff
@@ -1691,15 +1695,17 @@ Paint = function()
     if S.lesson and (kb:GetTop() or 0) * kb:GetEffectiveScale() < UIParent:GetHeight() * UIParent:GetEffectiveScale() * 0.7 then
         lift = 14
         if kb.toggle.over == kb.guide then lift = lift + kb.guide:GetHeight() + 4 end
-        if not ns.db.stickTipsOff then lift = lift + TOGGLE_GAP + 18 end
+        if not ns.db.stickTipsOff then lift = lift + TOGGLE_GAP + (kb.toggle.two and 36 or 18) end
         lift = lift + row
     end
     if kb.hintLift ~= lift then
         kb.hintLift = lift
         kb.hint:ClearAllPoints()
         if lift then
-            kb.hint:SetPoint("BOTTOMLEFT", kb, "TOPLEFT", 14, lift)
-            kb.hint:SetPoint("BOTTOMRIGHT", kb, "TOPRIGHT", -14, lift)
+            -- as wide as over the wide shape, whatever the shape (centred): the lesson's lines break the same
+            local out = (kb.wideW - kb.baseW) / 2
+            kb.hint:SetPoint("BOTTOMLEFT", kb, "TOPLEFT", 14 - out, lift)
+            kb.hint:SetPoint("BOTTOMRIGHT", kb, "TOPRIGHT", out - 14, lift)
         else
             -- Under the button bar when that hangs on the keyboard (a box with no footer of the game's to stand
             -- in for). The bar keeps the screen's scale, the hint the keyboard's: the bar's height in the hint's.
@@ -1820,15 +1826,33 @@ function ns.Restyle()
     local cellW = math.ceil(widest) + 20
     local reachX, reachY = HUB_R + 6 + cellW / 2, HUB_R + 4 + CELL_H / 2
     local roseW, roseH = 2 * (HUB_R + 6 + cellW), 2 * (HUB_R + 4 + CELL_H)
-    kb.roseH, kb.bodyH = roseH, math.max(roseH, CROSS_H)
-    kb.baseW = PAD * 2 + roseW * 2 + CrossW() + GAP * 2
+    -- Wide: a stick either side of the guesses. Stacked: the sticks side by side and the guesses over or under
+    -- them, with the keyboard's whole width for their own. middle: the guess cross's own, down from the
+    -- keyboard's top.
+    local crossW, between = CrossW(), 28
+    kb.wideW = PAD * 2 + roseW * 2 + crossW + GAP * 2
+    local roseX, roseY, middle
+    local stacked = ns.Stacked()
+    if stacked then
+        crossW = roseW * 2 + between
+        kb.bodyH, kb.baseW = roseH + GAP + CROSS_H, PAD * 2 + crossW
+        roseX = (between + roseW) / 2
+        if stacked == "above" then
+            middle, roseY = -(PAD + CROSS_H / 2), -(PAD + CROSS_H + GAP + roseH / 2)
+        else
+            roseY, middle = -(PAD + roseH / 2), -(PAD + roseH + GAP + CROSS_H / 2)
+        end
+    else
+        kb.bodyH, kb.baseW = math.max(roseH, CROSS_H), kb.wideW
+        middle = -(PAD + kb.bodyH / 2)
+        roseX, roseY = crossW / 2 + GAP + roseW / 2, middle
+    end
     kb:SetWidth(kb.baseW)
-    local middle = -(PAD + kb.bodyH / 2)
     local spots = { { 0, reachY }, { reachX, 0 }, { 0, -reachY }, { -reachX, 0 } }
     for i, rose in ipairs(kb.roses) do
         rose:SetSize(roseW, roseH)
         rose:ClearAllPoints()
-        rose:SetPoint("CENTER", kb, "TOP", (i == 1 and -1 or 1) * (CrossW() / 2 + GAP + roseW / 2), middle)
+        rose:SetPoint("CENTER", kb, "TOP", (i == 1 and -1 or 1) * roseX, roseY)
         for dir, cell in ipairs(rose.cells) do
             cell:SetSize(cellW, CELL_H)
             cell:SetPoint("CENTER", rose, "CENTER", spots[dir][1], spots[dir][2])
@@ -1858,7 +1882,7 @@ function ns.Restyle()
         slot.size = GUESS
         slot:ClearAllPoints()
         -- Up and down have the cross's whole width; a side word its half past the mark.
-        local width = (i == 1 or i == 4) and CrossW() or CrossW() / 2 - MARK_X - 10
+        local width = (i == 1 or i == 4) and crossW or crossW / 2 - MARK_X - 10
         slot:SetWidth(width)
         slot.room = (i == 2 or i == 3) and width or nil
         slot:SetJustifyH(i == 2 and "RIGHT" or i == 3 and "LEFT" or "CENTER")
@@ -1896,6 +1920,7 @@ function ns.Restyle()
     kb.hint:SetPoint("TOPRIGHT", kb, "BOTTOMRIGHT", -6, -4)
     kb.hintLift = false
     if box or S.preview then Paint() end
+    if S.preview then ns.SeatPreview() end
 end
 
 -- The typing language changed: its list, and the word under way dropped.
@@ -2212,6 +2237,16 @@ PlaceBy = function(edit)
     -- Beside the chat line, plus how far the player carried it (kept in screen units, whatever its size).
     local scale = kb:GetScale()
     local dx, dy = (ns.db.moveX or 0) / scale, (ns.db.moveY or 0) / scale
+    -- Stacked (tall): its bottom corner on the chat window's own, the messages' (the typing line is under them).
+    local chat = ns.Stacked() and edit.chatFrame
+    if chat then
+        if left then
+            kb:SetPoint("BOTTOMLEFT", chat, "BOTTOMRIGHT", 12 + dx, dy)
+        else
+            kb:SetPoint("BOTTOMRIGHT", chat, "BOTTOMLEFT", -12 + dx, dy)
+        end
+        return
+    end
     -- Off the typing line's top corner, with room under it for two lines of hint: those then stand beside the
     -- typing line, clear of the button bar under it.
     dy = dy + 36
@@ -2273,7 +2308,7 @@ end
 function ns.DevTools()
     return { OnStick = OnStick, Press = Press, Unpress = Unpress, Word = Word, PrevLow = PrevLow, Guess = Guess,
         state = S, dict = D, slotKeys = SLOT_KEYS, dirDegrees = DIR_DEGREES, lesson = LESSON,
-        Keyboard = function() return kb end, Box = function() return box end }
+        Keyboard = function() return kb end, Box = function() return box end, PlaceBy = PlaceBy }
 end
 
 local function Open(edit)
@@ -2349,12 +2384,27 @@ local function Open(edit)
     if ns.dev and ns.dev.Opened then ns.dev.Opened() end
 end
 
+-- The window the preview hangs under goes up by what the keyboard lacks in room under it, as far as the screen's
+-- top lets it. Fit.lift: the window's own way up, given with it (lift(0) is its place); without one it stays.
+Fit.PREVIEW_GAP = 44
+function ns.SeatPreview()
+    local under, lift = S.preview, Fit.lift
+    if not lift then return end
+    lift(0)
+    local unit = under:GetEffectiveScale()
+    local bottom, top = under:GetBottom(), under:GetTop()
+    if not (bottom and top) then return end
+    local need = (Fit.PREVIEW_GAP + kb:GetHeight()) * kb:GetEffectiveScale() / unit + 8
+    local spare = UIParent:GetHeight() * UIParent:GetEffectiveScale() / unit - top - 8
+    if need > bottom then lift(math.max(0, math.min(need - bottom, spare))) end
+end
+
 -- The keyboard as a picture of itself under a window (the first-login notice's size picker): at the player's
 -- size, a few words over the d-pad, no pad input taken. Called again with nothing, it goes.
-function ns.PreviewKeyboard(under)
+function ns.PreviewKeyboard(under, lift)
     if not under then
         if S.preview then
-            S.preview = nil
+            S.preview, Fit.lift = nil, nil
             if kb and not box then kb:Hide() end
         end
         return
@@ -2364,13 +2414,13 @@ function ns.PreviewKeyboard(under)
     -- finished) is let go, and so is a lesson left unfinished: the preview is the bare keyboard.
     if box and kb:IsShown() then return end
     box, S.lesson = nil, nil
-    S.preview = true
+    S.preview, Fit.lift = under, lift
     Reset("")
     S.slots = { "hello", "the", "you", "thanks" }
-    ns.Restyle()
     kb:ClearAllPoints()
-    kb:SetPoint("TOP", under, "BOTTOM", 0, -44)
+    kb:SetPoint("TOP", under, "BOTTOM", 0, -Fit.PREVIEW_GAP)
     kb:SetFrameStrata("FULLSCREEN_DIALOG")
+    ns.Restyle()
     kb:Show()
     Paint()
 end
