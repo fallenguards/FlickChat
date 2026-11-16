@@ -714,6 +714,35 @@ ns.db.shape = nil
 T.PlaceBy(chatBox)
 Is("wide: by the typing line as before", placed[1] == "BOTTOMLEFT" and placed[2] == chatBox and placed[3] == "TOPRIGHT", true)
 kb.SetPoint = nil
+-- the game's controller interface off: the button guide over the chat window, the keyboard's top left free
+local guidePlaced
+kb.guide.SetPoint = function(_, ...) guidePlaced = { ... } end
+padUI = false
+Open()
+Is("controller interface off: the button guide over the chat window", guidePlaced[1] == "BOTTOMLEFT"
+    and guidePlaced[2] == box.chatFrame and guidePlaced[3] == "TOPLEFT", true)
+Press("PAD2")
+-- the button guide carried from its settings row: the left stick moves it, the keyboard's place and size stay
+ns.MoveNext(nil, true)
+Open()
+local guideTick = lastTick
+Has("the line says the left stick moves the button guide", kb.hint.text, "button guide")
+kb.guide.GetLeft = function() return ns.db.guideX or 0 end
+local kbX, kbSize = ns.db.moveX, ns.db.size
+kb.scripts.OnGamePadStick(kb, "Left", 1, 0, 1)
+kb.scripts.OnGamePadStick(kb, "Right", 0, 1, 1)
+now = now + 0.05
+guideTick()
+Is("the left stick carries the guide", (ns.db.guideX or 0) > 0 and guidePlaced[4] == ns.db.guideX, true)
+Is("and leaves the keyboard's place and size", ns.db.moveX == kbX and ns.db.size == kbSize, true)
+kb.scripts.OnGamePadStick(kb, "Left", 0, 0, 0)
+kb.scripts.OnGamePadStick(kb, "Right", 0, 0, 0)
+Press("PAD2")
+Is("B puts it back", ns.db.guideX, 0)
+Press("PAD2")
+kb.guide.GetLeft, kb.guide.SetPoint = nil, nil
+ns.db.guideX, ns.db.guideY = nil, nil
+padUI = true
 -- the stacked shapes type as the wide one does (the letters layout back first: the lines above left the other on)
 for _, shape in ipairs({ "above", "below" }) do
     ns.db.shape = shape

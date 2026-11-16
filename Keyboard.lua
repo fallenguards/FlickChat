@@ -97,7 +97,7 @@ local kb, box
 local S = { committed = "", written = "", flicks = "", guesses = {}, stems = {}, shown = 0, slots = {} }
 local sticks = { Left = { base = 0 }, Right = { base = 4 } }
 sticks.Left.other, sticks.Right.other = sticks.Right, sticks.Left
-local Paint, WheelStick, PlaceBy
+local Paint, WheelStick, PlaceBy, PlaceGuide
 
 local function Glyph(key) return GetBindingText(key, 1) end
 
@@ -477,6 +477,7 @@ end
 
 -- Move mode (/flick move or the settings row, then the next time the keyboard opens): the left stick carries the
 -- keyboard, the right stick sizes it. A keeps it there, B puts it back, Y gives the place and size it came with.
+-- For the button guide (its own settings row) the left stick carries the guide, and the size stays.
 local Move = { SPEED = 520, SIZE_STEP = 5, SIZE_EVERY = 0.12, DEAD = 0.25 }
 
 function Move.End()
@@ -485,10 +486,16 @@ function Move.End()
     Paint()
 end
 
-function Move.Start()
+-- Where the piece being moved goes: the keyboard by its chat line, the guide by its own place.
+function Move.Place()
+    if S.move.guide then PlaceGuide() else PlaceBy(box) end
+end
+
+function Move.Start(guide)
     local db = ns.db
-    local move = { x = db.moveX or 0, y = db.moveY or 0, size = db.size, lx = 0, ly = 0, ry = 0, last = GetTime(),
-        sized = 0 }
+    local keyX, keyY = guide and "guideX" or "moveX", guide and "guideY" or "moveY"
+    local move = { guide = guide, keyX = keyX, keyY = keyY, x = db[keyX] or 0, y = db[keyY] or 0, size = db.size,
+        lx = 0, ly = 0, ry = 0, last = GetTime(), sized = 0 }
     S.move = move
     move.ticker = C_Timer.NewTicker(0.02, function()
         local now = GetTime()
@@ -496,14 +503,15 @@ function Move.Start()
         move.last = now
         if not box or not kb:IsShown() then return Move.End() end
         if move.lx ~= 0 or move.ly ~= 0 then
-            local wasX, wasY, left, bottom = db.moveX or 0, db.moveY or 0, kb:GetLeft(), kb:GetBottom()
-            db.moveX, db.moveY = wasX + move.lx * Move.SPEED * dt, wasY + move.ly * Move.SPEED * dt
-            PlaceBy(box)
-            -- At the screen's edge the game holds the keyboard: a push it did not follow is not kept.
-            if move.lx ~= 0 and kb:GetLeft() == left then db.moveX = wasX end
-            if move.ly ~= 0 and kb:GetBottom() == bottom then db.moveY = wasY end
+            local piece = guide and kb.guide or kb
+            local wasX, wasY, left, bottom = db[keyX] or 0, db[keyY] or 0, piece:GetLeft(), piece:GetBottom()
+            db[keyX], db[keyY] = wasX + move.lx * Move.SPEED * dt, wasY + move.ly * Move.SPEED * dt
+            Move.Place()
+            -- At the screen's edge the game holds it: a push it did not follow is not kept.
+            if move.lx ~= 0 and piece:GetLeft() == left then db[keyX] = wasX end
+            if move.ly ~= 0 and piece:GetBottom() == bottom then db[keyY] = wasY end
         end
-        if math.abs(move.ry) > 0.5 and now - move.sized >= Move.SIZE_EVERY then
+        if not guide and math.abs(move.ry) > 0.5 and now - move.sized >= Move.SIZE_EVERY then
             move.sized = now
             db.size = math.max(70, math.min(200, db.size + (move.ry > 0 and Move.SIZE_STEP or -Move.SIZE_STEP)))
             ns.Restyle()
@@ -525,16 +533,14 @@ function Move.Press(button)
     local db, move = ns.db, S.move
     if button == "PAD1" then
         Move.End()
-        ns.Say(L["MOVE_SAVED"])
-    elseif button == "PAD2" then
-        db.moveX, db.moveY, db.size = move.x, move.y, move.size
-        Move.End()
+        ns.Say(L[move.guide and "MOVE_GUIDE_SAVED" or "MOVE_SAVED"])
+    elseif button == "PAD2" or button == "PAD4" then
+        local back = button == "PAD2"
+        db[move.keyX], db[move.keyY] = back and move.x or 0, back and move.y or 0
+        if not move.guide then db.size = back and move.size or 100 end
         ns.Restyle()
-        PlaceBy(box)
-    elseif button == "PAD4" then
-        db.moveX, db.moveY, db.size = 0, 0, 100
-        ns.Restyle()
-        PlaceBy(box)
+        Move.Place()
+        if back then Move.End() end
     end
 end
 
@@ -1437,7 +1443,7 @@ end
 local function Hint()
     if S.lesson then return LessonText() end
     if S.wheel then return "" end
-    if S.move then return L["HINT_MOVE"]:format(Glyph("PAD1"), Glyph("PAD2"), Glyph("PAD4")) end
+    if S.move then return L[S.move.guide and "HINT_MOVE_GUIDE" or "HINT_MOVE"]:format(Glyph("PAD1"), Glyph("PAD2"), Glyph("PAD4")) end
     if S.draftBack then return L["DRAFT_BACK"]:format(Glyph("PADBACK")) end
     if S.forget then return L["FORGET_ASK"]:format(ns.Lower(S.forget), Glyph("PAD1")) end
     if S.phrases then
@@ -1575,7 +1581,9 @@ end
 local function PaintPrompts()
     -- R3 hides the hints picked on the settings page: both (the default), the bar or the guide alone.
     local reach = ns.db.hintsToggle or "both"
-    kb.guide:SetShown(not S.preview and not (ns.db.guideOff and (reach == "both" or reach == "guide")))
+    -- the guide being moved shows, whatever the player hid
+    local moving = S.move ~= nil and S.move.guide == true
+    kb.guide:SetShown(not S.preview and (moving or not (ns.db.guideOff and (reach == "both" or reach == "guide"))))
     -- Under a settings box the bar always shows: it is the only word on how to save or leave.
     kb.bar:SetShown(not S.preview
         and ((box ~= nil and not box.chatFrame) or not (ns.db.guideOff and (reach == "both" or reach == "bar"))))
@@ -1585,7 +1593,7 @@ local function PaintPrompts()
     if toggle.plain then text = toggle.plain .. " " .. text end
     toggle.label:SetText(text)
     -- Over the guide while it shows above the keyboard, else over the keyboard itself.
-    local over = (not kb.guide:IsShown() or kb.guideCorner) and kb or kb.guide
+    local over = (not kb.guide:IsShown() or kb.guideCorner or kb.guideOverChat) and kb or kb.guide
     -- Its mirror on the left: the left stick press, a capital (twice, all capitals).
     local caps = kb.capsTip
     SetIcon(caps, "PADLSTICK")
@@ -2024,16 +2032,28 @@ end
 -- takes its corner and it steps aside. Outside the game's controller mode the guide sits over the keyboard.
 local LEGEND_OWNER = { isShown = true }
 
-local function PlaceGuide()
+PlaceGuide = function()
     local legend = GamepadPersistentInputLegend
     kb.guide:ClearAllPoints()
     kb.guideCorner = legend ~= nil and not legend:IsForbidden() and legend:IsShown()
         and InputUtil ~= nil and InputUtil.IsGamepadUIEnabled()
+    -- Outside it, over chat's tabs: the keyboard's top and the lesson's lines over it stay free.
+    local chat = not kb.guideCorner and box and box.chatFrame
+    kb.guideOverChat = chat and not chat:IsForbidden() or nil
+    -- plus how far the player carried it (the settings' Button guide place)
+    local x, y = ns.db.guideX or 0, ns.db.guideY or 0
     if kb.guideCorner then
-        kb.guide:SetPoint("TOPLEFT", legend, "TOPLEFT", 0, 0)
+        kb.guide:SetPoint("TOPLEFT", legend, "TOPLEFT", x, y)
         StepAside(legend, LEGEND_OWNER)
+    elseif kb.guideOverChat then
+        local name = chat:GetName()
+        local tab = name and _G[name .. "Tab"]
+        local tabTop, chatTop = tab and tab:GetTop(), chat:GetTop()
+        local over = tabTop and chatTop
+            and (tabTop * tab:GetEffectiveScale() - chatTop * chat:GetEffectiveScale()) / kb.guide:GetEffectiveScale() or 30
+        kb.guide:SetPoint("BOTTOMLEFT", chat, "TOPLEFT", x, y + math.max(0, over) + 4)
     else
-        kb.guide:SetPoint("BOTTOMLEFT", kb, "TOPLEFT", 0, 4)
+        kb.guide:SetPoint("BOTTOMLEFT", kb, "TOPLEFT", x, y + 4)
     end
     kb.toggle.over = nil
 end
@@ -2391,8 +2411,9 @@ local function Open(edit)
     Guess()
     Show()
     if ns.moveNext and edit.chatFrame and not S.lesson then
+        local guide = ns.moveNext == "guide"
         ns.moveNext = nil
-        Move.Start()
+        Move.Start(guide)
     end
     if ns.practiceNext and edit.chatFrame and not S.lesson then
         ns.practiceNext = nil

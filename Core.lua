@@ -334,10 +334,10 @@ function ns.Forget(word)
     end
 end
 
--- The keyboard's place and size: set with the sticks the next time it opens.
-function ns.MoveNext(button)
-    ns.moveNext = true
-    ns.Tell(ns.L["MOVE_NEXT"], button)
+-- The keyboard's place and size, or the button guide's place: set with the sticks the next time it opens.
+function ns.MoveNext(button, guide)
+    ns.moveNext = guide and "guide" or true
+    ns.Tell(ns.L[guide and "MOVE_GUIDE_NEXT" or "MOVE_NEXT"], button)
 end
 
 function ns.ForgottenBack()
