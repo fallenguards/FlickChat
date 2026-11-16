@@ -722,6 +722,18 @@ Open()
 Is("controller interface off: the button guide over the chat window", guidePlaced[1] == "BOTTOMLEFT"
     and guidePlaced[2] == box.chatFrame and guidePlaced[3] == "TOPLEFT", true)
 Press("PAD2")
+-- the hint bar under chat in front of the action bars; held up into the chat (no room under it), behind the chat
+local barStrata
+kb.bar.SetFrameStrata = function(_, strata) barStrata = strata end
+box.GetBottom = function() return 300 end
+Open()
+Is("the hint bar under chat stands in front of the action bars", barStrata, "DIALOG")
+Press("PAD2")
+box.GetBottom = nil
+Open()
+Is("with no room under the chat line it stays behind the chat", barStrata, "LOW")
+Press("PAD2")
+kb.bar.SetFrameStrata = nil
 -- the button guide carried from its settings row: the left stick moves it, the keyboard's place and size stay
 ns.MoveNext(nil, true)
 Open()

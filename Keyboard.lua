@@ -2386,10 +2386,13 @@ local function Open(edit)
             kb.bar:SetPoint("TOPLEFT", kb, "BOTTOMLEFT", 0, -2)
         end
     end
-    -- As the game's own chat buttons: held on screen, and where that pushes it up into the chat, behind the chat.
+    -- Under chat, in front of the action bars. Held on screen: where that pushes it up into the chat, behind the
+    -- chat, as the game's own chat buttons.
     local chat = edit.chatFrame or edit:GetParent()
     if not edit.chatFrame then
         kb.bar:SetFrameStrata("TOOLTIP")
+    elseif (edit:GetBottom() or 0) * edit:GetEffectiveScale() >= (BAR_H + 2) * UIParent:GetEffectiveScale() then
+        kb.bar:SetFrameStrata("DIALOG")
     elseif chat and not chat:IsForbidden() then
         kb.bar:SetFrameStrata(chat:GetFrameStrata())
         kb.bar:SetFrameLevel(math.max(0, chat:GetFrameLevel() - 1))
