@@ -190,6 +190,10 @@ ns.EN = {
     NEWS_LANGUAGES = "now also guesses words in %s. It follows your game's language; to type in another, change Typing"
         .. " language in FlickChat's settings, on the last page of the keyboard's wheel.",
     UPDATE_OUT = "version %s is out (you have %s). Update in the CurseForge app, or at %s",
+    FEEDBACK = "Thank you for using %s! Have suggestions? Click %s.",
+    FEEDBACK_HERE = "here",
+    COPY_HINT = "Ctrl+C copies the address; then paste it into your browser.",
+    COPIED = "Copied",
     OPT_SHAPE = "Keyboard shape",
     SHAPE_WIDE = "Wide",
     SHAPE_ABOVE = "Words on top",

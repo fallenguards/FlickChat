@@ -43,6 +43,7 @@ function GetCurrentBindingSet() return 1 end
 function InCombatLockdown() return false end
 overrides = {}
 function hooksecurefunc(name, fn) if type(name) == 'string' then local old = _G[name] _G[name] = function(...) old(...) fn(...) end end end
+function SetItemRef() end
 function ClearOverrideBindings() overrides = {} end
 function SetOverrideBindingClick(owner, priority, key, button) overrides[key] = button end
 unpack = unpack or table.unpack
@@ -1045,7 +1046,7 @@ local function Heard(fn, ...)
     print = printWas
 end
 local function Addon(prefix, text) ns.events.scripts.OnEvent(ns.events, "CHAT_MSG_ADDON", prefix, text) end
-ns.db.languagesTold, ns.db.newest, ns.db.newestAt = nil, nil, nil
+ns.db.languagesTold, ns.db.newest, ns.db.newestAt, ns.db.feedbackTold = nil, nil, nil, "1.2.0"
 Heard(ns.LoginNotes)
 Is("the typing languages are told at login", #notes, 1)
 Has("each by its own name", notes[1], "Português, Français, Deutsch, Italiano")
@@ -1087,6 +1088,33 @@ Heard(ns.LoginNotes)
 Heard(ns.LoginNotes)
 Is("a language added since is told once", #notes, toldBefore + 1)
 Has("by itself", notes[#notes], "words in " .. ns.LANGUAGE_NAMES[ns.LANGUAGES[#ns.LANGUAGES]] .. ".")
+-- feedback: once a version at login; its [here] shows the address picked in a box
+ns.db.feedbackTold = "1.1.0"
+toldBefore = #notes
+Heard(ns.LoginNotes)
+Heard(ns.LoginNotes)
+Is("the feedback line is said once a version", #notes, toldBefore + 1)
+Has("thanking the player, the logo before the name", notes[#notes],
+    "Thank you for using |TInterface\\AddOns\\FlickChat\\media\\icon:0|t |cff2e8fe6FlickChat|r! Have suggestions?")
+Has("with a link to click", notes[#notes], "Click |cff2e8fe6|Haddon:FlickChat:feedback|h[here]|h|r.")
+SetItemRef("item:19019", "[Thunderfury]", "LeftButton")
+Is("another link shows no address", _G.FlickChatAddress, nil)
+SetItemRef("addon:FlickChat:feedback", "[here]", "LeftButton")
+local address = _G.FlickChatAddress
+Is("the link shows the address", address.shown, true)
+Is("in a box to copy", ns.addressBox.text, "https://github.com/fallenguards/FlickChat/issues")
+ns.addressBox.text = "https://github.com/fallenguards/FlickChat/issuesx"
+ns.addressBox.scripts.OnTextChanged(ns.addressBox, true)
+Is("typing leaves it as it was", ns.addressBox.text, "https://github.com/fallenguards/FlickChat/issues")
+local copied = address.copied
+ns.addressBox.scripts.OnKeyDown(ns.addressBox, "C")
+Is("C alone says nothing", copied.shown, false)
+IsControlKeyDown = function() return true end
+ns.addressBox.scripts.OnKeyDown(ns.addressBox, "C")
+IsControlKeyDown = function() return false end
+Is("Ctrl+C says it is copied", copied.shown and copied.text, "Copied")
+ns.addressBox.scripts.OnEscapePressed(ns.addressBox)
+Is("Escape shuts it", address.shown, false)
 
 -- every language's strings: none English lacks, and the same %s and %d in the same order as English's
 local function Blanks(text)

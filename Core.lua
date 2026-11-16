@@ -87,6 +87,7 @@ end
 -- Login notes: the typing languages, once; a newer version heard from someone in the guild or group, at each
 -- login until this one is as new (forgotten after a month unheard).
 local PREFIX, UPDATE_URL, HEARD_FOR = "FlickChat", "curseforge.com/wow/addons/flickchat", 30 * 86400
+local FEEDBACK_URL, FEEDBACK_LINK = "https://github.com/fallenguards/FlickChat/issues", "addon:FlickChat:feedback"
 local OWN_VERSION = C_AddOns.GetAddOnMetadata(addonName, "Version") or ""
 local SendAddonMessage, InLockdown = C_ChatInfo.SendAddonMessage, C_ChatInfo.InChatMessagingLockdown
 local updateTold, announced, grouped = false, 0, 0
@@ -107,6 +108,18 @@ end
 function ns.SayUpdate(newest)
     ns.Say("|cffff4040" .. ns.L["UPDATE_OUT"]:format(newest, OWN_VERSION, UPDATE_URL) .. "|r")
 end
+
+-- Thanks and where to leave feedback, the logo before the name; [here] shows the address to copy (the game
+-- opens no web page).
+function ns.SayFeedback()
+    local name = "|TInterface\\AddOns\\" .. addonName .. "\\media\\icon:0|t |cff2e8fe6" .. ns.L["TITLE"] .. "|r"
+    local here = "|cff2e8fe6|H" .. FEEDBACK_LINK .. "|h[" .. ns.L["FEEDBACK_HERE"] .. "]|h|r"
+    print(ns.L["FEEDBACK"]:format(name, here))
+end
+
+hooksecurefunc("SetItemRef", function(link)
+    if link == FEEDBACK_LINK then ns.ShowAddress(FEEDBACK_URL) end
+end)
 
 -- Another player's version, as their addon sent it: a newer one is said once a session.
 local function Heard(version)
@@ -140,6 +153,10 @@ function ns.LoginNotes()
     if told < #ns.LANGUAGES then
         db.languagesTold = #ns.LANGUAGES
         ns.SayLanguages(told)
+    end
+    if db.feedbackTold ~= OWN_VERSION then
+        db.feedbackTold = OWN_VERSION
+        ns.SayFeedback()
     end
     local newest, mine = VersionNumber(db.newest), VersionNumber(OWN_VERSION)
     if newest and mine and newest > mine and time() - (db.newestAt or 0) < HEARD_FOR then
@@ -511,6 +528,84 @@ end
 function ns.MyWordsText()
     local words = ns.db.myWords
     return words and words ~= "" and words or ns.L["WORDS_NONE"]
+end
+
+-- A web address picked in a box for Ctrl+C, "Copied" under it after. Nothing to type: an edit puts it back; Enter,
+-- Escape or a click away shut it.
+function ns.ShowAddress(url)
+    local copy = options.copy
+    if not copy then
+        copy = CreateFrame("Frame", "FlickChatAddress", UIParent)
+        copy:Hide()
+        copy:SetFrameStrata("DIALOG")
+        copy:SetSize(440, 10)
+        copy:SetPoint("TOP", 0, -160)
+        copy:EnableMouse(true)
+        ns.Dress(copy)
+        copy.title = copy:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+        copy.title:SetPoint("TOP", 0, -22)
+        copy.title:SetText(C_AddOns.GetAddOnMetadata(addonName, "Title"))
+        copy.title:SetTextColor(ns.BLUE[1], ns.BLUE[2], ns.BLUE[3])
+        copy.hint = copy:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        copy.hint:SetPoint("TOP", copy.title, "BOTTOM", 0, -12)
+        copy.hint:SetPoint("LEFT", 24, 0)
+        copy.hint:SetPoint("RIGHT", -24, 0)
+        local edit = CreateFrame("EditBox", nil, copy)
+        edit:SetAutoFocus(false)
+        edit:SetFontObject(GameFontHighlight)
+        edit:SetTextInsets(8, 8, 0, 0)
+        edit:SetHeight(28)
+        edit:SetPoint("TOP", copy.hint, "BOTTOM", 0, -12)
+        edit:SetPoint("LEFT", 24, 0)
+        edit:SetPoint("RIGHT", -24, 0)
+        local rim = edit:CreateTexture(nil, "BACKGROUND", nil, -2)
+        rim:SetAllPoints()
+        rim:SetColorTexture(1, 0.82, 0, 1)
+        local fill = edit:CreateTexture(nil, "BACKGROUND", nil, -1)
+        fill:SetPoint("TOPLEFT", 1, -1)
+        fill:SetPoint("BOTTOMRIGHT", -1, 1)
+        fill:SetColorTexture(0.05, 0.05, 0.06, 1)
+        local function Shut() copy:Hide() end
+        edit:SetScript("OnTextChanged", function(self, typed)
+            if typed then
+                self:SetText(copy.url)
+                self:HighlightText()
+            end
+        end)
+        edit:SetScript("OnEnterPressed", Shut)
+        edit:SetScript("OnEscapePressed", Shut)
+        edit:SetScript("OnEditFocusLost", Shut)
+        copy.copied = copy:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+        copy.copied:SetPoint("TOP", edit, "BOTTOM", 0, -8)
+        copy.copied:Hide()
+        local fade = copy.copied:CreateAnimationGroup()
+        local out = fade:CreateAnimation("Alpha")
+        out:SetFromAlpha(1)
+        out:SetToAlpha(0)
+        out:SetStartDelay(0.8)
+        out:SetDuration(0.8)
+        fade:SetScript("OnFinished", function() copy.copied:Hide() end)
+        edit:SetScript("OnKeyDown", function(_, key)
+            if key ~= "C" or not IsControlKeyDown() then return end
+            fade:Stop()
+            copy.copied:SetAlpha(1)
+            copy.copied:Show()
+            fade:Play()
+        end)
+        copy.edit = edit
+        ns.addressBox = edit
+        options.copy = copy
+    end
+    copy.url = url
+    copy.hint:SetText(ns.L["COPY_HINT"])
+    copy.copied:SetText(ns.L["COPIED"])
+    copy.copied:Hide()
+    copy:SetHeight(22 + copy.title:GetStringHeight() + 12 + copy.hint:GetStringHeight() + 12 + 28 + 8
+        + copy.copied:GetStringHeight() + 18)
+    copy:Show()
+    copy.edit:SetText(url)
+    copy.edit:SetFocus()
+    copy.edit:HighlightText()
 end
 
 -- One box for whichever phrase row was pressed: exactly over that row's button and opaque, so the phrase is typed

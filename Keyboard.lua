@@ -2624,7 +2624,8 @@ function Fit.Seek()
         if box == was then return ns.Shut() end
     end
     if not ns.db.enabled or not IsUsingGamepad() then return end
-    if not focus or edits[focus] or focus == box or focus:IsForbidden() or not focus:IsObjectType("EditBox") then return end
+    if not focus or edits[focus] or focus == box or focus == ns.addressBox or focus:IsForbidden()
+        or not focus:IsObjectType("EditBox") then return end
     -- A box whose text the game must never get from an addon (Direct.lua): typed into a box of ours over it,
     -- or left alone.
     local direct = ns.DirectFor(focus, Fit.WindowOf(focus))
