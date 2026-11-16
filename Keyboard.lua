@@ -260,7 +260,7 @@ local function TypeSymbol(c)
     if ATTACH[c] then
         if S.autoSpace then S.committed = S.committed:gsub(" $", "") end
         S.committed = S.committed .. c .. " "
-        S.autoSpace, S.symbols = true, false
+        S.autoSpace = true
     else
         S.committed = S.committed .. c
         S.autoSpace = false

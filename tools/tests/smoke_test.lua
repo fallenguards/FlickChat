@@ -331,6 +331,21 @@ Type("there")
 Press("PAD1")
 Is("A sends the line", sent[#sent], "Hello there")
 
+-- the symbols page stays up after any symbol: X or RT leaves it
+Open()
+Type("hello")
+Press("PAD3")
+Flick(3)
+Flick(4)
+Is("the symbols page stays after ? and !", T.state.symbols, true)
+Is("marks follow one another", box.text, "Hello?! ")
+Press("PAD3")
+Is("X leaves the symbols page", T.state.symbols, false)
+Press("PAD3")
+Press("PADRTRIGGER")
+Is("RT leaves the symbols page", T.state.symbols, false)
+Press("PAD2")
+
 -- LT held erases word by word, from its press and release (the game's controller interface)
 Open()
 for _ = 1, 6 do Type("hello") Press("PADRTRIGGER") end
