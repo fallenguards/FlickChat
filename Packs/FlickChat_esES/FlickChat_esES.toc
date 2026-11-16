@@ -2,7 +2,7 @@
 ## Title: FlickChat: Español
 ## Notes: Spanish words for FlickChat's controller keyboard. The game loads them only while you type in Spanish.
 ## Author: fallenguard
-## Version: 1.4.0
+## Version: 1.5.0
 ## Category: Chat
 ## Group: FlickChat
 ## Dependencies: FlickChat

@@ -2,7 +2,7 @@
 ## Title: FlickChat
 ## Notes: A controller keyboard for chat: flick the sticks toward each letter and it works out the word.
 ## Author: fallenguard
-## Version: 1.4.0
+## Version: 1.5.0
 ## IconTexture: Interface\AddOns\FlickChat\media\icon
 ## Category: Chat
 ## SavedVariables: FlickChatDB

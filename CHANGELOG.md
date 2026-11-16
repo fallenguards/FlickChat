@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0] - 2026-11-16
+
+### Added
+- Keyboard shape: besides the wide keyboard, the guessed words can sit in a row of their own on top of the letters or below them, for a narrower, taller keyboard. Pick it under Keyboard shape in the settings, or with Y in the first setup window.
+- Keyboard background: the dark backing behind the keyboard can be made solid, see-through or turned off while its border stays, in the settings or with LB and RB in the first setup window. The keyboard's size there is now on LT and RT.
+- Text size: the letters and guessed words can be made larger or smaller apart from the keyboard's size, in the settings or with the d-pad's left and right in the first setup window.
+- Button guide place: move the button guide with the left stick, from the settings.
+
+### Changed
+- Without the game's controller interface, the button guide sits over the chat window instead of on top of the keyboard, so it no longer covers the typing lesson.
+
+### Fixed
+- The button hints under chat now show in front of the action bars.
+
 ## [1.4.0] - 2026-11-14
 
 ### Added
