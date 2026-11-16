@@ -27,4 +27,5 @@ read_globals = {
     "MinimalSliderWithSteppersMixin", "LOCALIZED_CLASS_NAMES_MALE", "LE_PARTY_CATEGORY_INSTANCE", "GetZoneText",
     "GetSubZoneText", "GetChannelList", "GENERAL_CHAT_DOCK", "GamepadPersistentInputLegend", "FCFDock_SelectWindow",
     "Enum", "debugstack", "IsUsingGamepad", "OKAY", "GetNumFriends", "date",
+    "IsShiftKeyDown", "IsControlKeyDown", "IsAltKeyDown", "C_CVar",
 }

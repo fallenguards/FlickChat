@@ -53,8 +53,15 @@ C_Timer = {
     NewTicker = function(_, fn) lastTick = fn return { Cancel = function() end } end,
 }
 padDown = {}
-C_GamePad = { ButtonBindingToIndex = function(b) return ({ PADBACK = 4, PADLSHOULDER = 9, PADRSHOULDER = 10 })[b] end,
-    GetDeviceMappedState = function() return { buttons = padDown } end }
+C_GamePad = { ButtonBindingToIndex = function(b) return ({ PADBACK = 4, PADLTRIGGER = 6, PADLSHOULDER = 9, PADRSHOULDER = 10 })[b] end,
+    GetDeviceMappedState = function() return { buttons = padDown, axes = { 0, -1 } } end,
+    GetActiveDeviceID = function() return 1 end, ButtonIndexToBinding = function(i) return i == 6 and "PADLTRIGGER" or nil end,
+    -- like the game's, the mapped list counts from 1
+    GetDeviceRawState = function() return { rawButtons = { true }, rawAxes = { 0.5 } } end }
+C_CVar = { GetCVar = function(name) return cvars[name] end }
+function IsShiftKeyDown() return true end
+function IsControlKeyDown() return false end
+function IsAltKeyDown() return false end
 C_FriendList = { GetNumFriends = function() return 1 end,
     GetFriendInfoByIndex = function() return { name = "Arnold-Realm", connected = true } end }
 function BNGetNumFriends() return 1 end
@@ -258,7 +265,7 @@ local function Press(b)
     lastTick = nil
     kbf.scripts.OnGamePadButtonDown(kbf, b)
     -- View: one look with it down, then let go
-    if b == "PADBACK" and lastTick then padDown[4] = true lastTick() padDown[4] = nil lastTick() end
+    if b == "PADBACK" and lastTick then padDown[5] = true lastTick() padDown[5] = nil lastTick() end
     kbf.scripts.OnGamePadButtonUp(kbf, b)
 end
 
@@ -323,6 +330,74 @@ Is("RT keeps it with a space", box.text, "Hello ")
 Type("there")
 Press("PAD1")
 Is("A sends the line", sent[#sent], "Hello there")
+
+-- LT held erases word by word, from its press and release (the game's controller interface)
+Open()
+for _ = 1, 6 do Type("hello") Press("PADRTRIGGER") end
+Is("LT is no modifier key here: no watch on the pad", T.state.ltModifier, nil)
+Down("PADLTRIGGER")
+local before = box.text
+T.state.holdTimer.fn()
+local once = box.text
+Is("LT held erases a word", #once < #before, true)
+lastTick()
+Is("and another while it stays down", #box.text < #once, true)
+Up("PADLTRIGGER")
+Is("its release ends it", T.state.holdTicker, nil)
+Press("PADBACK")
+Press("PAD2")
+
+-- Outside it the game's settings make LT its Shift: a tap comes on letting go, a hold not at all; the keyboard
+-- reads the hold off the pad (its list counts from 1: LT's index 6 is entry 7)
+cvars.GamePadEmulateShift = "PADLTRIGGER"
+lastTick = nil
+Open()
+local watch = lastTick
+Is("LT as the game's Shift is watched on the pad", T.state.ltModifier == true and watch ~= nil, true)
+for _ = 1, 6 do Type("hello") Press("PADRTRIGGER") end
+before = box.text
+padDown[7] = true
+watch()
+now = now + 0.3
+watch()
+Is("held under the hold time, nothing goes", box.text, before)
+now = now + 0.2
+watch()
+once = box.text
+Is("held past it, a word goes", #once < #before, true)
+now = now + 0.25
+watch()
+Is("and another while it stays down", #box.text < #once, true)
+padDown[7] = nil
+now = now + 0.05
+watch()
+local left = box.text
+now = now + 0.05
+Down("PADLTRIGGER")
+Up("PADLTRIGGER")
+Is("the game's tap that comes with letting go is no extra erase", box.text, left)
+now = now + 1
+Down("PADLTRIGGER")
+Up("PADLTRIGGER")
+Is("a tap erases", #box.text < #left, true)
+Is("and starts no timer of its own", T.state.holdTimer, nil)
+-- /flick sticks: LT's press has the pad read for a while
+ns.StartStickProbe(40)
+padDown[7] = true
+lastTick = nil
+Down("PADLTRIGGER")
+Up("PADLTRIGGER")
+lastTick()
+padDown[7] = nil
+Has("the stick probe reads the pad", table.concat(ns.db.stickProbe.lines, "\n"),
+    "mapped {PADLTRIGGER a2=-1.00}; raw {1 a1=0.50}; shift true")
+now = now + 60
+lastTick()
+Press("PADBACK")
+Press("PAD2")
+watch()
+Is("the watch ends with the keyboard", T.state.ltModifier, nil)
+cvars.GamePadEmulateShift = "NONE"
 
 -- a word off the d-pad before it is fully flicked
 Open()

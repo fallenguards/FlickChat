@@ -419,7 +419,9 @@ local PROBE_LINES = 6000
 function ns.StartStickProbe(seconds)
     local now = GetTime()
     probe = { stop = now + seconds, start = now, lines = {} }
-    ns.db.stickProbe = { arm = ns.db.arm, rearm = ns.db.rearm, lesson = S.lesson ~= nil, lines = probe.lines }
+    ns.db.stickProbe = { arm = ns.db.arm, rearm = ns.db.rearm, lesson = S.lesson ~= nil, lines = probe.lines,
+        padUI = InputUtil ~= nil and InputUtil.IsGamepadUIEnabled() or false, shift = C_CVar.GetCVar("GamePadEmulateShift"),
+        ctrl = C_CVar.GetCVar("GamePadEmulateCtrl"), alt = C_CVar.GetCVar("GamePadEmulateAlt") }
 end
 
 local function Note(text)
@@ -429,6 +431,37 @@ local function Note(text)
         return
     end
     probe.lines[#probe.lines + 1] = string.format("%.3f %s", now - probe.start, text)
+end
+
+-- After an LT press: what the pad itself reads for 2.5 s (buttons down, axes off rest, the game's Shift).
+function ns.LookAtPad()
+    if probe.looking then return end
+    probe.looking = true
+    local function Read(state, Name)
+        local out = {}
+        for i, on in pairs(state and (state.buttons or state.rawButtons) or {}) do
+            -- the list counts from 1, the game's button index from 0
+            if on == true then out[#out + 1] = Name and (Name(i - 1) or tostring(i)) or tostring(i) end
+        end
+        for i, v in pairs(state and (state.axes or state.rawAxes) or {}) do
+            if math.abs(v) > 0.05 then out[#out + 1] = ("a%d=%.2f"):format(i, v) end
+        end
+        return table.concat(out, " ")
+    end
+    local looks, ticker = 0, nil
+    ticker = C_Timer.NewTicker(0.1, function()
+        looks = looks + 1
+        if not probe or looks > 25 then
+            ticker:Cancel()
+            if probe then probe.looking = nil end
+            return
+        end
+        local id = C_GamePad.GetActiveDeviceID()
+        Note(("pad: LT index %s, device %s; mapped {%s}; raw {%s}; shift %s"):format(
+            tostring(C_GamePad.ButtonBindingToIndex("PADLTRIGGER")), tostring(id),
+            Read(C_GamePad.GetDeviceMappedState(), C_GamePad.ButtonIndexToBinding),
+            Read(id and C_GamePad.GetDeviceRawState(id)), tostring(IsShiftKeyDown())))
+    end)
 end
 
 local function Dir4(x, y)
@@ -1172,6 +1205,9 @@ local function Press(button)
     elseif button == "PADLTRIGGER" and S.phraseSave then
         S.phraseSave = false
         Paint()
+    elseif button == "PADLTRIGGER" and S.ltModifier then
+        -- the game's tap on letting go; right after a hold off the pad (Fit.WatchLT) it is not one more erase
+        if GetTime() >= (S.ltQuiet or 0) then Undo() end
     elseif button == "PADLTRIGGER" then
         Undo()
         StartHold()
@@ -2152,7 +2188,11 @@ local function Build()
     kb.hint:SetWordWrap(true)
     kb:SetScript("OnGamePadStick", OnStick)
     kb:SetScript("OnGamePadButtonDown", function(_, button)
-        if probe then Note("down " .. button) end
+        if probe then
+            Note(("down %s%s%s%s"):format(button, IsShiftKeyDown() and " shift" or "", IsControlKeyDown() and " ctrl" or "",
+                IsAltKeyDown() and " alt" or ""))
+            if probe and button == "PADLTRIGGER" then ns.LookAtPad() end
+        end
         Press(button)
     end)
     kb:SetScript("OnGamePadButtonUp", function(_, button)
@@ -2165,6 +2205,7 @@ local function Build()
         self:EnableGamePadStick(not S.preview)
     end)
     kb:SetScript("OnHide", function(self)
+        if probe then Note("keyboard hidden") end
         self:EnableGamePadButton(false)
         self:EnableGamePadStick(false)
         StopHold()
@@ -2354,6 +2395,42 @@ function ns.DevTools()
         Keyboard = function() return kb end, Box = function() return box end, PlaceBy = PlaceBy }
 end
 
+-- Outside the game's controller interface its settings can make LT a modifier key (Shift by default): a tap then
+-- comes as a press and release together on letting go, and a hold never comes at all (/flick sticks, 2026-11-16).
+-- While the keyboard is up, LT held is read off the pad itself.
+function Fit.WatchLT()
+    if Fit.ltTicker then Fit.ltTicker:Cancel() end
+    Fit.ltTicker, S.ltModifier, S.ltQuiet = nil, nil, nil
+    local index, lt = C_GamePad.ButtonBindingToIndex("PADLTRIGGER"), "PADLTRIGGER"
+    if not index or InputUtil ~= nil and InputUtil.IsGamepadUIEnabled() then return end
+    if C_CVar.GetCVar("GamePadEmulateShift") ~= lt and C_CVar.GetCVar("GamePadEmulateCtrl") ~= lt
+        and C_CVar.GetCVar("GamePadEmulateAlt") ~= lt then return end
+    S.ltModifier = true
+    local since, nextAt
+    Fit.ltTicker = C_Timer.NewTicker(0.05, function()
+        if not box or not kb:IsShown() then
+            Fit.ltTicker:Cancel()
+            Fit.ltTicker, S.ltModifier = nil, nil
+            return
+        end
+        local state = C_GamePad.GetDeviceMappedState()
+        local now = GetTime()
+        -- the list counts from 1, the game's button index from 0
+        if not (state and state.buttons[index + 1]) or kb.viewHold or S.move or S.wheel or S.forget or S.phraseSave then
+            since, nextAt = nil, nil
+            return
+        end
+        since = since or now
+        nextAt = nextAt or since + HOLD_DELAY
+        if now >= nextAt then
+            if probe then Note("LT held, read off the pad") end
+            DeleteWord()
+            nextAt = nextAt + HOLD_REPEAT
+        end
+        if nextAt > since + HOLD_DELAY then S.ltQuiet = now + 0.3 end
+    end)
+end
+
 local function Open(edit)
     S.preview = nil
     if not kb then Build() end
@@ -2406,6 +2483,7 @@ local function Open(edit)
     -- Over a settings box it stands above the game's controller cursor, which marks the window under it.
     kb:SetFrameStrata(edit.chatFrame and "DIALOG" or "TOOLTIP")
     kb:Show()
+    Fit.WatchLT()
     GameChatButtons(edit)
     PlaceGuide()
     -- The guide in the game's corner would lie on a window standing there: over the keyboard then.
