@@ -155,7 +155,7 @@ function generic.GetBottom() return 0 end
 function generic.GetFrameLevel() return 1 end
 function generic.GetCenter() return 300, 100 end
 function generic.GetParent(self) return self.parent end
-function generic.SetFont(self, f, size) assert(type(size) == "number") self.font, self.fontSize = true, size end
+function generic.SetFont(self, f, size) assert(type(size) == "number") self.font, self.fontSize, self.fontPath = true, size, f end
 function generic.SetAlpha(self, alpha) self.alpha = alpha end
 function generic.SetColorTexture(self, r, g, b, a) self.color = { r, g, b, a or 1 } end
 function generic.SetPoint(self, ...) for i = 1, select("#", ...) do local v = select(i, ...) assert(v ~= nil or i > 1, "nil point arg") end end
@@ -699,6 +699,10 @@ Is("Russian title case changes one whole letter", ns.Capital("ёлка"), "Ёл�
 ns.db.language = "ruRU"
 Open()
 Is("Russian uses Cyrillic letter groups", ns.LAYOUTS.letters[1], "абвг")
+-- drawn in the game's Cyrillic font: an English game's standard font has no Russian letters (they show as boxes)
+local cyrillicFont = "Fonts\\FRIZQT___CYR.TTF"
+Is("Russian letters are drawn in the game's Cyrillic font", kb.roses[1].cells[1].text.fontPath == cyrillicFont
+    and kb.slots[1].fontPath == cyrillicFont and kb.hint.fontPath == cyrillicFont, true)
 Is("a Russian capital types the same as lowercase", D.KeyOf("ПРИВЕТ"), D.KeyOf("привет"))
 local allLetters = {}
 for group = 1, 8 do
@@ -790,6 +794,7 @@ local learnedRussian = ns.db.learned["привет"]
 ns.db.language = "enUS"
 Open()
 Is("switching back restores the Latin layout", ns.LAYOUTS.letters[1], "abc")
+Is("and the game's standard font", kb.roses[1].cells[1].text.fontPath, STANDARD_TEXT_FONT)
 Is("English does not inherit Russian learned words", ns.db.learned["привет"], nil)
 Type("hello")
 Press("PAD1")
@@ -798,6 +803,8 @@ Open()
 ns.db.language = "ruRU"
 ns.Relanguage()
 Is("switching an open keyboard restores Cyrillic groups", ns.LAYOUTS.letters[1], "абвг")
+Is("and the Cyrillic font, the lesson lines' too", kb.roses[1].cells[1].text.fontPath == cyrillicFont
+    and kb.hintSkip.fontPath == cyrillicFont and kb.hintGoal.fontPath == cyrillicFont, true)
 Is("switching back restores Russian learned words", ns.db.learned["привет"], learnedRussian)
 Type("привет")
 Press("PAD1")

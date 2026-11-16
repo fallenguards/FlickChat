@@ -66,6 +66,8 @@ local NAME_GROUP, NAME_KNOWN, NAME_PLACE = 0.002, 0.0003, 0.0005
 -- Text sizes in pixels on a 1080-line screen at size 100: base at text size 100, the rest at the player's (Restyle).
 local TEXT = { base = { letter = 18, guess = 18, hint = 13, channel = 14, lesson = 18 } }
 for key, size in pairs(TEXT.base) do TEXT[key] = size end
+-- The font: a typing language whose letters a game in another alphabet's standard font lacks has its own.
+TEXT.font, TEXT.fonts = STANDARD_TEXT_FONT, { ruRU = "Fonts\\FRIZQT___CYR.TTF" }
 -- The button guide is its own box above the keyboard (as the game's controller legend is); R3 shows or hides it,
 -- and a free line over the top right of the whole stack always says so.
 local TOGGLE_GAP = 4
@@ -1260,7 +1262,7 @@ local function PaintRose(rose, st)
         local digit = st.base + dir
         local pick = ring and ring[digit]
         if rose.wheel ~= (ring ~= nil) then
-            cell.text:SetFont(STANDARD_TEXT_FONT, ring and TEXT.channel or TEXT.letter, "OUTLINE")
+            cell.text:SetFont(TEXT.font, ring and TEXT.channel or TEXT.letter, "OUTLINE")
         end
         if ring then
             cell.text:SetText(pick and pick.label or "")
@@ -1654,7 +1656,7 @@ Paint = function()
             local width = slot:GetStringWidth()
             if width > slot.room then size = math.max(math.floor(size * SIDE_SHRINK), math.floor(size * slot.room / width)) end
             if slot.size ~= size then
-                slot:SetFont(STANDARD_TEXT_FONT, size, "OUTLINE")
+                slot:SetFont(TEXT.font, size, "OUTLINE")
                 slot.size = size
             end
         end
@@ -1694,7 +1696,7 @@ Paint = function()
     PaintPrompts()
     local size = S.lesson and TEXT.lesson or TEXT.hint
     if kb.hintSize ~= size then
-        kb.hint:SetFont(STANDARD_TEXT_FONT, size, "OUTLINE")
+        kb.hint:SetFont(TEXT.font, size, "OUTLINE")
         kb.hintSize = size
     end
     -- Under the window, and gone with the hints the player hid; the lesson's lines always show.
@@ -1732,7 +1734,7 @@ Paint = function()
     kb.hintBack:SetPoint("BOTTOMRIGHT", kb.hint, "BOTTOMRIGHT", 8, -7 - row)
     kb.hintBack:SetShown(lift ~= false and kb.hint:GetText() ~= nil)
     if kb.skipSize ~= size then
-        kb.hintSkip:SetFont(STANDARD_TEXT_FONT, size, "OUTLINE")
+        kb.hintSkip:SetFont(TEXT.font, size, "OUTLINE")
         kb.skipSize = size
     end
     kb.hintSkip:SetText(S.lesson and (Glyph("PAD4") .. " " .. L["LESSON_SKIP"]) or "")
@@ -1754,7 +1756,7 @@ Paint = function()
     end
     -- A font before any text, the lesson running or not: text set on a fontless string is an error.
     if kb.goalSize ~= size then
-        kb.hintGoal:SetFont(STANDARD_TEXT_FONT, size + 2, "OUTLINE")
+        kb.hintGoal:SetFont(TEXT.font, size + 2, "OUTLINE")
         kb.goalSize = size
     end
     kb.hintGoal:SetText(goal)
@@ -1837,7 +1839,9 @@ function ns.Restyle()
         frame.back:SetAlpha(opacity)
         frame.back:SetShown(opacity > 0)
     end
-    local font = STANDARD_TEXT_FONT
+    TEXT.font = TEXT.fonts[ns.WantedLanguage()] or STANDARD_TEXT_FONT
+    kb.skipSize, kb.goalSize = nil, nil
+    local font = TEXT.font
     local widest = 0
     kb.measure:SetFont(font, TEXT.letter, "OUTLINE")
     for _, set in ipairs({ ns.LAYOUTS[ns.db.layout] or ns.LAYOUTS.letters, SYMBOLS }) do
