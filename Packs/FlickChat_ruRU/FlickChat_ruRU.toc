@@ -3,7 +3,7 @@
 ## Notes: Russian words for FlickChat's controller keyboard. Loaded only while typing in Russian.
 ## Notes-ruRU: Русский словарь для клавиатуры FlickChat. Загружается только при вводе на русском языке.
 ## Author: fallenguard
-## Version: 1.6.0
+## Version: 1.7.0
 ## Category: Chat
 ## Group: FlickChat
 ## Dependencies: FlickChat

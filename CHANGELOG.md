@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.0] - 2026-11-16
+
+### Changed
+- The symbols page now stays up after . , ? and ! as it does after any other symbol, so ?!, ... and the like need no X in between. X, RT or sending goes back to letters.
+
+### Fixed
+- Holding LT erases word after word without the game's controller interface too; before, it erased only one word per press there.
+
 ## [1.6.0] - 2026-11-16
 
 ### Added
