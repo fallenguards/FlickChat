@@ -41,12 +41,15 @@ jobs:
           exit $EXIT_CODE
 
   smoke:
-    name: Smoke tests
+    name: Smoke tests (Lua ${{ matrix.lua }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        lua: ['5.1', '5.4']
     steps:
       - uses: actions/checkout@v5
       - uses: leafo/gh-actions-lua@v10
         with:
-          luaVersion: '5.4'
+          luaVersion: ${{ matrix.lua }}
       - name: Load the addon and drive the keyboard
         run: lua tools/tests/smoke_test.lua .

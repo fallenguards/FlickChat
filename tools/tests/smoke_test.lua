@@ -618,7 +618,7 @@ Is("and the results still go out", query.searchString, "wool")
 focus = nil
 
 -- every typing language: its folder's words become the keyboard's, an accented word comes out whole, its lesson's
--- words are plain letters its list offers, the drill word rolls three boxes and swings across, and its folder
+-- words are lowercase letters its list offers, the drill word rolls three boxes and swings across, and its folder
 -- carries the addon's version
 local D = ns.Dict
 local function Version(path)
@@ -627,7 +627,7 @@ local function Version(path)
         if version then return version end
     end
 end
-local ACCENTED = { enUS = "hello", ptBR = "não", frFR = "où", deDE = "für", itIT = "più", esES = "también" }
+local ACCENTED = { enUS = "hello", ptBR = "não", frFR = "où", deDE = "für", itIT = "più", esES = "también", ruRU = "ещё" }
 for _, code in ipairs(ns.LANGUAGES) do
     ns.db.language, ns.db.wordsOf, ns.db.others = code, code, {}
     ns.db.learned, ns.db.pairs, ns.db.forms, ns.db.forgot = {}, {}, {}, {}
@@ -640,12 +640,14 @@ for _, code in ipairs(ns.LANGUAGES) do
     for step in T.lesson.lines[code]:gmatch("%S+") do steps[#steps + 1] = step end
     Is(code .. ": the lesson has eleven steps", #steps, 11)
     for _, step in ipairs(steps) do
-        if step:find("%a") then
+        if D.KeyOf(step) then
             local guesses, stems = D.Decode(D.KeyOf(step), prev)
             local there = false
             for _, word in ipairs(guesses) do there = there or ns.Lower(word) == step end
             for _, word in ipairs(stems) do there = there or ns.Lower(word) == step end
-            if step:find("[^a-z]") then wrong[#wrong + 1] = step .. " (plain small letters only)" end
+            if ns.Lower(step) ~= step or #D.KeyOf(step) ~= #ns.Characters(step) then
+                wrong[#wrong + 1] = step .. " (lowercase letters only)"
+            end
             if not there then wrong[#wrong + 1] = step .. " (not offered)" end
             prev = step
         end
@@ -664,6 +666,135 @@ for _, code in ipairs(ns.LANGUAGES) do
             Version(dir .. "/Packs/FlickChat_" .. code .. "/FlickChat_" .. code .. ".toc"), Version(dir .. "/FlickChat.toc"))
     end
 end
+-- Cyrillic is handled as letters, not bytes: case, exact input, fallback, practice and both layouts.
+local russianLower = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+local russianUpper = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
+Is("every Russian capital has a lowercase", ns.Lower(russianUpper), russianLower)
+Is("every Russian letter has a capital", ns.Upper(russianLower), russianUpper)
+Is("mixed Latin and Cyrillic case is kept", ns.Lower("ЁЖ Hello ÉTÉ"), "ёж hello été")
+Is("Russian title case changes one whole letter", ns.Capital("ёлка"), "Ёлка")
+ns.db.language = "ruRU"
+Open()
+Is("Russian uses Cyrillic letter groups", ns.LAYOUTS.letters[1], "абвг")
+Is("a Russian capital types the same as lowercase", D.KeyOf("ПРИВЕТ"), D.KeyOf("привет"))
+local allLetters = {}
+for group = 1, 8 do
+    for _, c in ipairs(D.Box(group)) do
+        allLetters[#allLetters + 1] = c
+        Is("one whole Russian letter in a box: " .. c, #ns.Characters(c), 1)
+    end
+end
+Is("all 33 Russian letters can be typed exactly", table.concat(allLetters), russianLower)
+local wrongKeys, rareWords = 0, 0
+for _, lines in pairs(ns.wordLists.ruRU.rare) do
+    for key, word in lines:gmatch("\n(%d+) (%S+) %d+") do
+        rareWords = rareWords + 1
+        if D.KeyOf(word) ~= key then wrongKeys = wrongKeys + 1 end
+    end
+end
+Is("the Russian pack has a full dictionary, not just chat phrases", rareWords > 10000, true)
+Is("Russian precomputed rare keys match the runtime alphabet", wrongKeys, 0)
+Type("привет")
+Press("PAD1")
+Is("Russian predictive typing sends a whole word", sent[#sent], "Привет")
+Is("Russian sent words are learned in lowercase", ns.db.learned["привет"] ~= nil, true)
+Open()
+Press("PADLSTICK")
+Press("PADLSTICK")
+Type("привет")
+Press("PAD1")
+Is("caps lock handles Cyrillic", sent[#sent], "ПРИВЕТ")
+Open()
+Press("PADLSHOULDER")
+for _, c in ipairs(ns.Characters("жюёъ")) do
+    local group = tonumber(D.KeyOf(c))
+    Flick(group)
+    for i, letter in ipairs(D.Box(group)) do if letter == c then Flick(i) break end end
+end
+Is("exact input includes ё and hard sign", box.text, "Жюёъ")
+Press("PADLTRIGGER")
+Is("backspace removes one Cyrillic letter, not one byte", box.text, "Жюё")
+Press("PAD1")
+Open()
+for _ = 1, 21 do Flick(8) end
+Is("unknown flicks fall back to whole Cyrillic letters", T.Word(), string.rep("ы", 21))
+Press("PADBACK")
+Press("PAD2")
+ns.db.layout = "vowels"
+Open()
+Type("спасибо")
+Press("PAD1")
+Is("Russian predictions work on the vowels layout", sent[#sent], "Спасибо")
+Is("Russian vowels are on the left stick", ns.LAYOUTS.vowels[4], "ыэюя")
+Press("PAD2")
+ns.db.layout = "letters"
+ns.PracticeNext()
+Open()
+Is("typing practice opens with Cyrillic words", ns.practice ~= nil, true)
+local russianPractice = _G.FlickChatPractice.words.text:match("|c%x%x%x%x%x%x%x%x(.-)|r")
+Is("practice offers a Russian word", russianPractice:find("[\208\209]") ~= nil, true)
+ns.practice.Typed(ns.Upper(russianPractice))
+now = now + 1
+lastTick()
+Has("Russian practice counts characters, not bytes", _G.FlickChatPractice.foot.text,
+    tostring((#ns.Characters(russianPractice) + 1) * 12) .. " words a minute")
+Press("PAD2")
+ns.db.lessonDone = false
+Open()
+Has("the Russian lesson names its first word", Told(), "мы")
+Has("the Russian lesson displays a whole first letter", Told(), "м")
+Has("the Russian lesson separates words in the goal", kb.hintGoal.text, "мы|r |cffffffffэтот")
+Type("мы")
+Press("PADRTRIGGER")
+Is("the Russian lesson advances after its first word", T.state.lesson.at, 2)
+Is("a Russian lesson line is checked as words, not symbols", T.lesson.Check(), nil)
+Press("PADBACK")
+T.state.lesson.at = 4
+Press("PADBACK")
+Has("the Russian chain lesson names whole letters", Told(), "з")
+Roll(-90, -180)
+Is("Russian chaining passes its first stage", T.state.lesson.stage, 2)
+Roll(-90, -360)
+Is("Russian chaining passes its second stage", T.state.lesson.stage, 3)
+Roll(-90, -360)
+Flick(4)
+Is("Russian chaining ends with the swing across", T.state.lesson.chained, true)
+Press("PAD4")
+Press("PADBACK")
+Press("PAD2")
+ns.db.lessonDone = true
+local learnedRussian = ns.db.learned["привет"]
+ns.db.language = "enUS"
+Open()
+Is("switching back restores the Latin layout", ns.LAYOUTS.letters[1], "abc")
+Is("English does not inherit Russian learned words", ns.db.learned["привет"], nil)
+Type("hello")
+Press("PAD1")
+Is("a cached English dictionary restores its letter map", sent[#sent], "Hello")
+Open()
+ns.db.language = "ruRU"
+ns.Relanguage()
+Is("switching an open keyboard restores Cyrillic groups", ns.LAYOUTS.letters[1], "абвг")
+Is("switching back restores Russian learned words", ns.db.learned["привет"], learnedRussian)
+Type("привет")
+Press("PAD1")
+Is("a cached Russian dictionary restores its letter map", sent[#sent], "Привет")
+Press("PAD2")
+ns.locale, ns.db.language = "ruRU", nil
+Is("a Russian game automatically selects Russian", ns.WantedLanguage(), "ruRU")
+Is("a Russian game shows translated settings", ns.L.OPT_LANGUAGE, "Язык ввода")
+Is("a Russian game has Russian quick phrases", ns.Phrase(1), "привет")
+ns.PreviewKeyboard(UIParent)
+Is("a Russian keyboard preview uses Cyrillic groups", ns.LAYOUTS.letters[1], "абвг")
+Is("a Russian keyboard preview uses Russian guesses", T.state.slots[1]:find("[\208\209]") ~= nil, true)
+ns.PreviewKeyboard()
+local missingRussian = {}
+for key in pairs(ns.EN) do
+    if ns.locales.ruRU[key] == nil then missingRussian[#missingRussian + 1] = key end
+end
+Is("every interface string is translated to Russian", table.concat(missingRussian, ", "), "")
+ns.locale = "enUS"
+
 -- a language whose folder is not there: said once, and English's words
 local lines = {}
 local printWas = print
@@ -831,11 +962,11 @@ IsInGuild = wasInGuild
 Is("this version goes out to the guild at login", addonSent[1], "FlickChat v1.2.0 GUILD")
 -- a language added after the note was told: told once more, by itself
 local toldBefore = #notes
-ns.db.languagesTold = 5
+ns.db.languagesTold = #ns.LANGUAGES - 1
 Heard(ns.LoginNotes)
 Heard(ns.LoginNotes)
 Is("a language added since is told once", #notes, toldBefore + 1)
-Has("by itself", notes[#notes], "words in Español.")
+Has("by itself", notes[#notes], "words in " .. ns.LANGUAGE_NAMES[ns.LANGUAGES[#ns.LANGUAGES]] .. ".")
 
 -- every language's strings: none English lacks, and the same %s and %d in the same order as English's
 local function Blanks(text)

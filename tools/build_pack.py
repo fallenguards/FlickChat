@@ -30,7 +30,6 @@ FAMILY, SLOTS = 5, 1 << 25
 # An elided word (l') is one from this many uses onto a next word: fewer is a name or a typo.
 ELIDED_LEAST = 20
 LETTERS = ["abc", "def", "ghi", "jklm", "nop", "qrs", "tuv", "wxyz"]
-DIGIT = {c: str(g + 1) for g, letters in enumerate(LETTERS) for c in letters}
 TOKEN = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)*'?")
 
 # Game shorthand players of every language use, by how often chat uses it: the count of the word at that rank.
@@ -46,7 +45,8 @@ SHARED = {
 # tatoeba: the language's code there; filter: its list's file; accents: its accented letters, for exact letters;
 # elide: words are elided onto the next with an apostrophe (l'ami) and count joined and apart; nouns: every noun
 # has a capital, so only a word English also writes with one is a name; everyday: words its filter list holds
-# that are everyday ones, left out of the filter; chat: its own chat and game words by rank.
+# that are everyday ones, left out of the filter; chat: its own chat and game words by rank;
+# layouts: optional letter groups for a non-Latin alphabet (must match the pack's precomputed rare keys).
 LANGS = {
     "ptBR": dict(
         tatoeba="por", name="Portuguese", filter="pt", accents="áàâãçéêíóôõúü", elide=False, nouns=False,
@@ -110,13 +110,43 @@ LANGS = {
             paladín chamán sacerdote orco trol tauren humano enano gnomo elfo sanador cura tanque daño listo
             listos espera esperen esperad susurro susurra""",
         }),
+    "ruRU": dict(
+        tatoeba="rus", name="Russian", filter="ru", accents="", elide=False, nouns=False,
+        layouts={
+            "letters": ["абвг", "деёж", "зийк", "лмно", "прст", "уфхц", "чшщъ", "ыьэюя"],
+            "vowels": ["ае", "ёи", "оу", "ыэюя", "бвгджз", "йклмн", "прстф", "хцчшщъь"],
+        },
+        everyday="блин задница дурак идиот",
+        chat={
+            150: """привет ку спс спасибо пж плз ок ага нет да лол кек афк гц бб ща сек инв го
+            мы этот данж знаем кто пойдёт сегодня""",
+            600: """хил хила хилы хилер хилить танк танка танки дд дпс агро пул пулить вайп рес
+            ресни баф бафы бафни дебаф мана омв лфг лфм пати рейд гильдия ги клан группа
+            квест квесты данжи подземелье инст инсты босс босса боссы лут шмот шмотки фарм фармить
+            кач качать качаться лвл уровень маунт голд голда золото серебро медь банк почта аук аукцион
+            сумка сумки портал порт камень еда вода пить реген готов готовы подожди подождите иду бегу
+            ищу нужен нужна нужны возьмите пригласите продам куплю обмен помоги помогите помощь сорри
+            орда альянс воин вар маг рога разбойник хант охотник лок чернокнижник друид дру пал паладин
+            шам шаман прист жрец орк тролль таурен нежить человек дворф гном эльф хилом танком ддшник
+            дискорд войс аддон макрос пвп пве бг арена альт твинк профа крафт реагенты энчант""",
+            4000: """Штормград Оргриммар Стальгорн Дарнас Подгород Громовой Утёс Азерот Калимдор
+            Элвинн Западный Край Красногорье Сумеречный Лес Тернистая Долина Степи Танарис
+            Мёртвые Копи Пещеры Стенаний Крепость Тёмного Клыка Непроглядная Пучина Тюрьма
+            Гномреган Монастырь Алого Ордена Ульдаман Зулфаррак Мародон Глубины Чёрной Горы
+            Некроситет Стратхольм Забытый Город Логово Ониксии Огненные Недра Наксрамас""",
+        }),
 }
 LANG = LANGS[CODE]
+LETTERS = LANG.get("layouts", {}).get("letters", LETTERS)
+DIGIT = {c: str(g + 1) for g, letters in enumerate(LETTERS) for c in letters}
 # A French word with an apostrophe that is no elision: never taken apart.
 WHOLE = {"aujourd'hui", "prud'homme", "prud'hommes", "grand'mère"}
 
 
 def fold(c):
+    # Russian й and ё are letters in their own right, not accented и and е.
+    if c in DIGIT:
+        return c
     return "s" if c == "ß" else unicodedata.normalize("NFD", c)[0]
 
 
@@ -244,6 +274,8 @@ for source in (SHARED, LANG["chat"]):
     for rank, chat in source.items():
         for w in chat.split():
             low = w.lower()
+            if not key_of(low):
+                continue  # Latin shorthand cannot be typed on a Cyrillic-only layout.
             words[low] = max(words.get(low, 0), by_rank[rank])
             if w != low:
                 forms[low] = w
@@ -328,6 +360,11 @@ with open(os.path.join(out_dir, "Words.lua"), "w", encoding="utf-8", newline="\n
     out.write("-- (0 starts a message): times followed, by how many different words, then follower and count pairs;\n")
     out.write("-- rare: the rarer words by key, lines of key, word, count.\n")
     out.write('FlickChat_AddWords("%s", {\n' % CODE)
+    if "layouts" in LANG:
+        out.write("layouts = {\n")
+        for name, groups in LANG["layouts"].items():
+            out.write('    %s = { %s },\n' % (name, ", ".join('"%s"' % g for g in groups)))
+        out.write("},\n")
     out.write('accents = "%s",\n' % LANG["accents"])
     out.write('joins = "%s",\n' % " ".join(joins))
     out.write("mature = [[\n%s\n]],\n" % "\n".join(mature))

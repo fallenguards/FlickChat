@@ -32,7 +32,7 @@ local MISSING_PAUSE = 1.2
 -- d-pad has them); its flicks, taken at a light tilt, set the player's own.
 -- The lesson's three lines, word by word: flicks and the d-pad, then a line ending on a question mark, then sending.
 -- A line ends after the steps in LESSON_LINE_END (the box is cleared for the next one).
--- Each typing language has its own, all of one shape and in plain letters (the steps name each letter): four
+-- Each typing language has its own, all of one shape (the steps name each letter): four
 -- words, the fourth the chain drill's; three and a question mark; a short thanks and a smiley.
 local LESSON = {}
 LESSON.lines = {
@@ -42,6 +42,7 @@ LESSON.lines = {
     deDE = "wir brauchen einen heiler welcher dungeon heute ? danke : )",
     itIT = "ci serve un healer quale dungeon stasera ? grazie : )",
     esES = "se busca un healer hacemos una mazmorra ? gracias : )",
+    ruRU = "мы этот данж знаем кто пойдёт сегодня ? спасибо : )",
 }
 function LESSON.Use(code)
     local i = 0
@@ -132,7 +133,7 @@ end
 -- Flicks no word fits: each group's first letter, so the count still shows.
 local function Fallback()
     local groups = ns.LAYOUTS[ns.db.layout] or ns.LAYOUTS.letters
-    return (S.flicks:gsub("%d", function(d) return groups[tonumber(d)]:sub(1, 1) end))
+    return (S.flicks:gsub("%d", function(d) return ns.Characters(groups[tonumber(d)])[1] end))
 end
 
 -- What the chat box shows: one letter per flick (stems: the likeliest letters so far, RT steps through them).
@@ -633,7 +634,7 @@ function LESSON.Run(late)
         lesson.wait:Cancel()
         lesson.wait = nil
     end
-    local key, m = target and target:find("%a") and D.KeyOf(target), #S.flicks
+    local key, m = target and D.KeyOf(target), #S.flicks
     if not key or m < asked.a - 1 then
         lesson.asked = nil
         return
@@ -1287,7 +1288,7 @@ local function PaintRose(rose, st)
             else
                 c = picking:sub(i, i)
             end
-            if S.capsLock or S.caps then c = c:upper() end
+            if S.capsLock or S.caps then c = ns.Upper(c) end
         end
         label:SetText(c)
     end
@@ -1309,7 +1310,7 @@ function LESSON.Check()
     if have == "" then return end
     for i = first, math.min(lesson.at - 1, #LESSON) do
         local entry = LESSON[i]
-        local joins = entry == "?" or (i > first and not entry:find("%a") and not LESSON[i - 1]:find("%a"))
+        local joins = entry == "?" or (i > first and not D.KeyOf(entry) and not D.KeyOf(LESSON[i - 1]))
         text = text .. ((text == "" or joins) and "" or " ") .. entry
         if have == text then
             if i < lesson.at - 1 then lesson.at, lesson.stage, lesson.chained = i + 1, nil, nil end
@@ -1330,7 +1331,7 @@ local function LessonText()
     local target = LESSON[lesson.at]
     if not target then return L["LESSON_SEND"]:format(LESSON.last, Glyph("PAD1")) end
     -- A symbol: the page first; then a flick for a box's first symbol, the hold and pick for any other.
-    if not target:find("%a") then
+    if not D.KeyOf(target) then
         if not S.symbols then return L["LESSON_SYMBOLS"]:format(target, Glyph("PAD3")) end
         local box, place
         for g, symbols in ipairs(SYMBOLS) do
@@ -1344,12 +1345,12 @@ local function LessonText()
         return L["LESSON_SYMBOL_HOLD"]:format(target, SYMBOLS[box], stick, way,
             L[left and "STICK_RIGHT" or "STICK_LEFT"], L["DIR_" .. place], target)
     end
-    local key = D.KeyOf(target)
+    local key, targetLetters = D.KeyOf(target), ns.Characters(target)
     if lesson.at == LESSON.roll and not lesson.chained then
         local stage = lesson.stage or 1
         local letters, ways = {}, {}
         for j = 1, LESSON.stages[stage] do
-            letters[j] = target:sub(j, j)
+            letters[j] = targetLetters[j]
             ways[j] = L["DIR_" .. ((tonumber(key:sub(j, j)) - 1) % 4 + 1)]
         end
         lesson.next = tonumber(key:sub(#S.flicks + 1, #S.flicks + 1))
@@ -1371,7 +1372,7 @@ local function LessonText()
         local want, got = tonumber(key:sub(i, i)), tonumber(S.flicks:sub(i, i))
         local back = Glyph("PADLTRIGGER")
         if not want then return L["LESSON_TOO_MANY"]:format(target, back) end
-        local how = { target:sub(i, i), Groups()[want], L[want <= 4 and "STICK_LEFT" or "STICK_RIGHT"],
+        local how = { targetLetters[i], Groups()[want], L[want <= 4 and "STICK_LEFT" or "STICK_RIGHT"],
             L["DIR_" .. ((want - 1) % 4 + 1)], back }
         local sameStick, sameDir = (want <= 4) == (got <= 4), (want - got) % 4 == 0
         if sameDir and not sameStick then return L["LESSON_WRONG_STICK"]:format(unpack(how)) end
@@ -1406,7 +1407,7 @@ local function LessonText()
         lesson.next = digit
         local opens = lesson.at == 1 or LESSON_LINE_END[lesson.at - 1]
         -- A word's first flick names the word (the line's first word, or the next); its later ones carry on.
-        local line = L[i > 1 and "LESSON_FLICK_ON" or opens and "LESSON_FLICK_FIRST" or "LESSON_FLICK"]:format(target, target:sub(i, i), Groups()[digit],
+        local line = L[i > 1 and "LESSON_FLICK_ON" or opens and "LESSON_FLICK_FIRST" or "LESSON_FLICK"]:format(target, targetLetters[i], Groups()[digit],
             L[digit <= 4 and "STICK_LEFT" or "STICK_RIGHT"], L["DIR_" .. ((digit - 1) % 4 + 1)])
         -- Once the drill is done, letters in a row on one stick are asked for as one move (never the same box
         -- twice running: that takes a return to rest).
@@ -1416,7 +1417,7 @@ local function LessonText()
                 local d, before = tonumber(key:sub(j, j)), j > i and tonumber(key:sub(j - 1, j - 1))
                 if (d <= 4) ~= (digit <= 4) or before == d then break end
                 local way = L["DIR_" .. ((d - 1) % 4 + 1)]
-                letters[#letters + 1] = target:sub(j, j)
+                letters[#letters + 1] = targetLetters[j]
                 ways[#ways + 1] = before and (before - d) % 4 == 2 and L["LESSON_ACROSS"]:format(way) or way
                 j = j + 1
             end
@@ -1430,7 +1431,7 @@ local function LessonText()
         end
         if lesson.at == 1 and i == 1 then return L["LESSON_START"] .. "\n\n" .. line end
         if intro ~= "" then return intro .. line end
-        if shown ~= target:sub(1, #S.flicks) and not lesson.missed then
+        if shown ~= table.concat(targetLetters, "", 1, #S.flicks) and not lesson.missed then
             return L["LESSON_GUESSING"]:format(Word(), Groups()[tonumber(key:sub(i - 1, i - 1))]) .. "\n\n" .. line
         end
         return line
@@ -1745,7 +1746,7 @@ Paint = function()
         for i = first, #LESSON do
             local word = (i < at and "|cff8c8c8c" or "|cffffffff") .. D.Form(LESSON[i]) .. "|r"
             -- a question mark closes its word, a symbol after a symbol joins it (the smiley)
-            local joins = #words > 0 and (LESSON[i] == "?" or (not LESSON[i]:find("%a") and not LESSON[i - 1]:find("%a")))
+            local joins = #words > 0 and (LESSON[i] == "?" or (not D.KeyOf(LESSON[i]) and not D.KeyOf(LESSON[i - 1])))
             if joins then words[#words] = words[#words] .. word else words[#words + 1] = word end
             if LESSON_LINE_END[i] then break end
         end
@@ -1841,7 +1842,7 @@ function ns.Restyle()
     kb.measure:SetFont(font, TEXT.letter, "OUTLINE")
     for _, set in ipairs({ ns.LAYOUTS[ns.db.layout] or ns.LAYOUTS.letters, SYMBOLS }) do
         for _, letters in ipairs(set) do
-            kb.measure:SetText(letters:upper())
+            kb.measure:SetText(ns.Upper(letters))
             widest = math.max(widest, kb.measure:GetStringWidth())
         end
     end
@@ -1953,6 +1954,7 @@ function ns.Relanguage()
     LESSON.Use(D.Code())
     D.Refresh(S.names)
     S.flicks, S.literal = "", nil
+    ns.Restyle()
     Guess()
     Show()
 end
@@ -2455,9 +2457,11 @@ function ns.PreviewKeyboard(under, lift)
     -- finished) is let go, and so is a lesson left unfinished: the preview is the bare keyboard.
     if box and kb:IsShown() then return end
     box, S.lesson = nil, nil
+    D.Build()
+    D.Refresh()
     S.preview, Fit.lift = under, lift
     Reset("")
-    S.slots = { "hello", "the", "you", "thanks" }
+    S.slots = D.Next("<s>")
     kb:ClearAllPoints()
     kb:SetPoint("TOP", under, "BOTTOM", 0, -Fit.PREVIEW_GAP)
     kb:SetFrameStrata("FULLSCREEN_DIALOG")

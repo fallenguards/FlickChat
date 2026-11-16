@@ -126,7 +126,7 @@ function practice.Typed(word)
     run.tried = run.tried + 1
     if entry.right then
         run.right = run.right + 1
-        run.chars = run.chars + #entry.word + 1
+        run.chars = run.chars + #ns.Characters(entry.word) + 1
     end
     run.at = run.at + 1
     if run.at > #run.rows[run.row] then

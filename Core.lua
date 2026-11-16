@@ -7,20 +7,36 @@ ns.L = setmetatable({}, { __index = function(_, key)
     return own and own[key] or ns.EN and ns.EN[key] or key
 end })
 
--- Lua's lower and upper leave accented letters as they are: these know the Latin ones (two bytes, the first 195;
--- the oe ligature and the y with dots have 197's).
+-- Lua's lower and upper only know ASCII: handle Latin accents and the Russian alphabet explicitly.
 local UTF8 = "[%z\1-\127\194-\244][\128-\191]*"
 local function Shift(by) return function(c) return "\195" .. string.char(c:byte() + by) end end
 local DownOne, UpOne = Shift(32), Shift(-32)
+local CYRILLIC_LOWER, CYRILLIC_UPPER = {}, {}
+do
+    local upper = ("АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"):gmatch(UTF8)
+    for lower in ("абвгдеёжзийклмнопрстуфхцчшщъыьэюя"):gmatch(UTF8) do
+        local capital = upper()
+        CYRILLIC_LOWER[capital], CYRILLIC_UPPER[lower] = lower, capital
+    end
+end
+
+-- Letter positions, not byte offsets (chat box cursor and highlight offsets still use bytes).
+function ns.Characters(text)
+    local letters = {}
+    for c in text:gmatch(UTF8) do letters[#letters + 1] = c end
+    return letters
+end
 
 function ns.Lower(text)
     text = text:lower()
+    text = text:gsub("[\208\209][\128-\191]", CYRILLIC_LOWER)
     if not text:find("[\195\197]") then return text end
     return (text:gsub("\195([\128-\150\152-\158])", DownOne):gsub("\197\146", "\197\147"):gsub("\197\184", "\195\191"))
 end
 
 function ns.Upper(text)
     text = text:upper()
+    text = text:gsub("[\208\209][\128-\191]", CYRILLIC_UPPER)
     if not text:find("[\195\197]") then return text end
     return (text:gsub("\195([\160-\182\184-\190])", UpOne):gsub("\197\147", "\197\146"):gsub("\195\191", "\197\184"))
 end
@@ -33,9 +49,9 @@ end
 -- Typing languages. English's words are the addon's own; each other language's are a load-on-demand folder
 -- beside it (FlickChat_ptBR), which hands them over with FlickChat_AddWords as it loads.
 -- New ones go last: the login note names those past the ones it has told.
-ns.LANGUAGES = { "enUS", "ptBR", "frFR", "deDE", "itIT", "esES" }
+ns.LANGUAGES = { "enUS", "ptBR", "frFR", "deDE", "itIT", "esES", "ruRU" }
 ns.LANGUAGE_NAMES = { enUS = "English", ptBR = "Português", frFR = "Français", deDE = "Deutsch", itIT = "Italiano",
-    esES = "Español" }
+    esES = "Español", ruRU = "Русский" }
 -- A game language typed with another's words: Latin American Spanish with Spanish's.
 local SAME_WORDS = { esMX = "esES" }
 local function GameLanguage() return SAME_WORDS[ns.locale] or ns.locale end

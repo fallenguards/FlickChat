@@ -1,6 +1,7 @@
 ## Interface: 16001, 120100, 120105, 120107
 ## Title: FlickChat
 ## Notes: A controller keyboard for chat: flick the sticks toward each letter and it works out the word.
+## Notes-ruRU: Клавиатура чата для геймпада: выбирайте стиками группы букв, и она подберёт слово.
 ## Author: fallenguard
 ## Version: 1.5.0
 ## IconTexture: Interface\AddOns\FlickChat\media\icon
@@ -16,6 +17,7 @@ Locales\esES.lua
 Locales\frFR.lua
 Locales\itIT.lua
 Locales\ptBR.lua
+Locales\ruRU.lua
 Words.lua
 Keyboard.lua
 Direct.lua

@@ -25,9 +25,14 @@ author of 12dicts and a major contributor to ENABLE2K.
 The other languages' word lists
 
 The words, word counts and word-pair counts in the language folders (FlickChat_ptBR, FlickChat_frFR, FlickChat_deDE,
-FlickChat_itIT, FlickChat_esES) are derived from Tatoeba's Portuguese, French, German, Italian and Spanish sentences
-(https://tatoeba.org), licensed under CC BY 2.0 FR (https://creativecommons.org/licenses/by/2.0/fr/). Chat shorthand
-and game words were added by hand; zone, dungeon, class and race names are the game's own.
+FlickChat_itIT, FlickChat_esES, FlickChat_ruRU) are derived from Tatoeba's Portuguese, French, German, Italian,
+Spanish and Russian sentences (https://tatoeba.org), licensed under CC BY 2.0 FR
+(https://creativecommons.org/licenses/by/2.0/fr/). Chat shorthand and game words were added by hand; zone,
+dungeon, class and race names are the game's own.
+
+The Russian pack was generated with tools/build_pack.py from Tatoeba's Russian sentence export dated
+2026-11-14 (https://downloads.tatoeba.org/exports/per_language/rus/rus_sentences.tsv.bz2) and Russian game
+names from https://wago.tools/db2/{Map,AreaTable,ChrClasses,ChrRaces}/csv?locale=ruRU.
 
 Mature word filter
 
@@ -35,5 +40,5 @@ The words the mature word filter leaves out come from the English list of "List 
 Otherwise Bad Words" (https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words), licensed
 under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Changes: single words only, some everyday words left
 out, plain endings and a few words added. The language folders' filters come from the same project's Portuguese,
-French, German, Italian and Spanish lists, under the same license. Changes: single words only, some everyday words
-left out.
+French, German, Italian, Spanish and Russian lists, under the same license. Changes: single words only,
+some everyday words left out.

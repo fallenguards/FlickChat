@@ -11,10 +11,11 @@ ns.Dict = D
 local log, exp, byte, char, sub = math.log, math.exp, string.byte, string.char, string.sub
 local find, match, LowerCase = string.find, string.match, ns.Lower
 
-ns.LAYOUTS = {
+local LATIN_LAYOUTS = {
     letters = { "abc", "def", "ghi", "jklm", "nop", "qrs", "tuv", "wxyz" },
     vowels = { "a", "e", "io", "tuy", "bcdf", "ghjkl", "mnpq", "rsvwxz" },
 }
+ns.LAYOUTS = LATIN_LAYOUTS
 
 -- A misflick: the next direction round on the same stick, or the same direction on the other stick.
 local NEXT_COST, OTHER_COST = log(0.02 / 0.95), log(0.01 / 0.95)
@@ -58,7 +59,7 @@ local words, lows, keys, prob, idOf, order, sorted
 -- pairLines[id]: the word's followers as the data has them; after: the word before's, read once per word.
 local pairLines
 local after = { id = false, counts = {}, top = {}, total = 0, kinds = 0 }
-local digitOf = {}
+local digitOf = {} -- the active list's character-to-group map
 -- extras: names and the player's own words outside the list; own: the player's counts.
 local extras = {}
 local own = { total = 0, mix = 0, next = {}, ctx = {} }
@@ -219,7 +220,7 @@ local total = 1
 local function KeyOf(word)
     local out = {}
     for c in word:gmatch(UTF8) do
-        c = FOLD[c] or c:lower()
+        c = FOLD[c] or LowerCase(c)
         local digit = digitOf[c]
         if digit then
             out[#out + 1] = digit
@@ -244,7 +245,7 @@ function D.SetLayout(name)
     local groups = ns.LAYOUTS[name] or ns.LAYOUTS.letters
     wipe(digitOf)
     for g, letters in ipairs(groups) do
-        for c in letters:gmatch(".") do digitOf[c] = tostring(g) end
+        for c in letters:gmatch(UTF8) do digitOf[c] = tostring(g) end
     end
     for i = 1, #words do
         keys[i] = KeyOf(words[i]) or ""
@@ -284,7 +285,7 @@ function D.SetLayout(name)
     lex.boxes = {}
     for g, letters in ipairs(groups) do
         local box = {}
-        for c in letters:gmatch(".") do box[#box + 1] = c end
+        for c in letters:gmatch(UTF8) do box[#box + 1] = c end
         for c in lex.accents:gmatch(UTF8) do
             if digitOf[FOLD[c] or c] == tostring(g) then box[#box + 1] = c end
         end
@@ -294,10 +295,11 @@ end
 
 -- A language's list from its data: words (word and count lines, commonest first), pairs, rare, and for a
 -- language folder's: mature (its filter's words), joins (elided words that take no space after: l'),
--- accents (its accented letters, for exact letters).
+-- accents (its accented letters, for exact letters), layouts (optional non-Latin letter groups).
 local function NewList(code, data)
     local l = { code = code, words = {}, lows = {}, keys = {}, prob = {}, idOf = {}, order = {}, sorted = {}, cut = {},
-        rareHeads = {}, mature = {}, joins = {}, total = 0, accents = data.accents or "" }
+        rareHeads = {}, mature = {}, joins = {}, total = 0, accents = data.accents or "",
+        layouts = data.layouts or LATIN_LAYOUTS, digitOf = {} }
     for word, count in data.words:gmatch("(%S+) (%d+)") do
         local id = #l.words + 1
         l.words[id], l.lows[id], l.prob[id] = word, LowerCase(word), tonumber(count)
@@ -326,8 +328,10 @@ function D.Build()
         lex = l
         words, lows, keys, prob, idOf, order, sorted = l.words, l.lows, l.keys, l.prob, l.idOf, l.order, l.sorted
         pairLines, cut, rare, rareHeads, lettersRare, total = l.pairLines, l.cut, l.rare, l.rareHeads, l.lettersRare, l.total
+        digitOf = l.digitOf
         after.id = false
     end
+    ns.LAYOUTS = l.layouts
     if not l.rare or l.layout ~= ns.db.layout then D.SetLayout(ns.db.layout) end
 end
 
@@ -361,11 +365,11 @@ function D.Form(low)
     return id and words[id] or RareForm(low) or low
 end
 
--- The i-th commonest word when it is one for typing practice: plain lowercase letters, two or more, never one
--- the mature filter holds.
+-- The i-th commonest word when it is one for typing practice: lowercase letters, two or more, never one
+-- the mature filter holds. Key length counts letters, not UTF-8 bytes.
 function D.PracticeWord(i)
     local word = words[i]
-    if word and word == lows[i] and #word >= 2 and not find(word, "[^a-z]") and not mature[word] and not lex.mature[word] then
+    if word and word == lows[i] and #keys[i] >= 2 and not find(word, "['%s]") and not mature[word] and not lex.mature[word] then
         return word
     end
 end
