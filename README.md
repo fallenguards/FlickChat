@@ -6,7 +6,7 @@ Open chat from the game's controller menu and the keyboard comes with it. A shor
 
 Keyboard shape in the settings stacks the guessed words with the letters, on top or below, for a narrower keyboard.
 
-It guesses words in English, Spanish, Portuguese, French, German and Italian. It follows your game's language, and Typing language in the settings picks another.
+It guesses words in English, Spanish, Portuguese, French, German, Italian and Russian. It follows your game's language, and Typing language in the settings picks another.
 
 It needs the game's controller mode and the IM chat style (Options, Social, Chat Style). FlickChat offers the switch if you are on Classic style.
 
