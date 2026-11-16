@@ -25,6 +25,9 @@ SlashCmdList = {}
 GameFontNormal = {}
 Enum = Enum or { UITextureSliceMode = { Stretched = 0 } }
 C_Texture = { GetAtlasInfo = function() return { width = 32, height = 32 } end }
+-- the game's border: one piece of it, to see it is left alone
+NineSliceLayouts = { Dialog = {} }
+NineSliceUtil = { ApplyLayoutByName = function(frame) frame.TopEdge = frame:CreateTexture(nil, "BORDER") end }
 MinimalSliderWithSteppersMixin = { Label = { Right = 2 }, Event = { OnValueChanged = "OnValueChanged" } }
 SOUNDKIT = {}
 function PlaySound() end
@@ -152,7 +155,9 @@ function generic.GetBottom() return 0 end
 function generic.GetFrameLevel() return 1 end
 function generic.GetCenter() return 300, 100 end
 function generic.GetParent(self) return self.parent end
-function generic.SetFont(self, f, size) assert(type(size) == "number") self.font = true end
+function generic.SetFont(self, f, size) assert(type(size) == "number") self.font, self.fontSize = true, size end
+function generic.SetAlpha(self, alpha) self.alpha = alpha end
+function generic.SetColorTexture(self, r, g, b, a) self.color = { r, g, b, a or 1 } end
 function generic.SetPoint(self, ...) for i = 1, select("#", ...) do local v = select(i, ...) assert(v ~= nil or i > 1, "nil point arg") end end
 function generic.SetTextColor(self, r, g, b) assert(r and g and b, "color") end
 local function Obj(parent)
@@ -403,6 +408,29 @@ notice.scripts.OnGamePadButtonDown(notice, "PAD4")
 Is("Y again puts the words below, the same size", ns.db.shape == "below" and kb.w == stackedW and kb.h == stackedH, true)
 notice.scripts.OnGamePadButtonDown(notice, "PAD4")
 Is("and once more it is wide again, with no pick kept", ns.db.shape == nil and kb.w == wideW and kb.h == wideH, true)
+-- the triggers step the keyboard's size, the bumpers under them its background, the d-pad's left and right the text
+notice.scripts.OnGamePadButtonDown(notice, "PADRTRIGGER")
+Is("RT in the window makes the keyboard larger", ns.db.size, 110)
+notice.scripts.OnGamePadButtonDown(notice, "PADLTRIGGER")
+Is("LT takes it back", ns.db.size, 100)
+Is("a new player's background starts at 90", ns.db.backOpacity == 90 and kb.back.alpha == 0.9, true)
+notice.scripts.OnGamePadButtonDown(notice, "PADLSHOULDER")
+Is("LB fades the keyboard's background from its 90 to 80", ns.db.backOpacity == 80 and kb.back.alpha == 0.8
+    and kb.guide.back.alpha == 0.8, true)
+for _ = 1, 8 do notice.scripts.OnGamePadButtonDown(notice, "PADLSHOULDER") end
+Is("its border stays solid, even with no background", kb.TopEdge ~= nil and kb.TopEdge.alpha == nil
+    and kb.TopEdge.shown ~= false and kb.guide.TopEdge.alpha == nil, true)
+Is("down to none it is gone", ns.db.backOpacity == 0 and not kb.back.shown, true)
+for _ = 1, 10 do notice.scripts.OnGamePadButtonDown(notice, "PADRSHOULDER") end
+Is("RB brings it back, up to full: solid, nothing seen through it", ns.db.backOpacity == 100 and kb.back.shown
+    and kb.back.alpha == 1 and kb.back.color[4] == 1, true)
+local letter = kb.roses[1].cells[1].text
+local letterWas = letter.fontSize
+notice.scripts.OnGamePadButtonDown(notice, "PADDRIGHT")
+Is("d-pad right in the window makes the text larger", ns.db.textSize == 110 and letter.fontSize > letterWas, true)
+Is("the keyboard's size stays, its middle widens for the larger words", ns.db.size == 100 and kb.w > wideW, true)
+notice.scripts.OnGamePadButtonDown(notice, "PADDLEFT")
+Is("d-pad left takes it back", ns.db.textSize == 100 and letter.fontSize == letterWas and kb.w == wideW, true)
 generic.Hide(_G.FlickChatNotice)
 Is("closing it puts the preview away", kb.shown, false)
 -- the preview under any other window, one with no way up of its own: it hangs there and nothing is asked of it
@@ -449,7 +477,17 @@ for _ = 1, 7 do own.scripts.OnGamePadButtonDown(own, "PADDDOWN") end
 own.scripts.OnGamePadButtonDown(own, "PADDRIGHT")
 Is("d-pad down to the size, right adds to it", ns.db.size, size + 5)
 own.scripts.OnGamePadButtonDown(own, "PADDLEFT")
--- the shape is the row under the size; stacked, the word room row under it says why it changes nothing
+-- the keyboard's background under the size, then the text's own size, each leaving the size as it is
+own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
+own.scripts.OnGamePadButtonDown(own, "PADDLEFT")
+Is("the background is the next row: left fades it", ns.db.backOpacity == 95 and kb.back.alpha == 0.95
+    and ns.db.size == size, true)
+own.scripts.OnGamePadButtonDown(own, "PADDRIGHT")
+own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
+own.scripts.OnGamePadButtonDown(own, "PADDRIGHT")
+Is("the text size is the row under it, apart from the keyboard's size", ns.db.textSize == 105 and ns.db.size == size, true)
+own.scripts.OnGamePadButtonDown(own, "PADDLEFT")
+-- the shape under that; stacked, the word room row under it says why it changes nothing
 own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
 own.scripts.OnGamePadButtonDown(own, "PAD1")
 Is("A on the next row turns the keyboard's shape", ns.db.shape, "above")

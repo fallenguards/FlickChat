@@ -37,6 +37,8 @@ local function Specs()
     Check("stickTips", L["OPT_STICK_TIPS"])
     Head(L["OPT_HEAD_SIZE"])
     Slider("size", L["OPT_SIZE"], 70, 200)
+    Slider("backOpacity", L["OPT_BACK"], 0, 100)
+    Slider("textSize", L["OPT_TEXT_SIZE"], 70, 150)
     Button(L["OPT_SHAPE"], ns.ShapeName, function() ns.NextShape() end, L["OPT_SHAPE_TIP"])
     -- stacked, the words have the keyboard's whole width already: the row says why it changes nothing
     Slider("wordRoom", L["OPT_WORD_ROOM"], 70, 160, function() return ns.Stacked() and L["OPT_WORD_ROOM_STACKED"] or "" end)

@@ -49,7 +49,8 @@ local LoadAddOn = C_AddOns.LoadAddOn
 -- language: the language typed in (none: the game's own); wordsOf: whose learned words the four tables above
 -- are; others: the other languages' learned words, by language.
 local DEFAULTS = { enabled = true, learned = {}, pairs = {}, forms = {}, forgot = {}, uses = {}, layout = "letters", size = 100,
-    arm = 0.55, rearm = 0.3, lessonDone = false, phrases = {}, wheelSize = 100, wordRoom = 100, others = {} }
+    arm = 0.55, rearm = 0.3, lessonDone = false, phrases = {}, wheelSize = 100, wordRoom = 100, others = {}, textSize = 100,
+    backOpacity = 90 }
 local DB_VERSION = 2
 local LEARN_CAP, PAIR_CAP = 2000, 4000
 local WHISPERS_KEPT = 10
@@ -443,6 +444,14 @@ local ROWS = {
         ns.db.wordRoom = value
         if ns.Restyle then ns.Restyle() end
     end },
+    textSize = { function() return ns.db.textSize end, function(value)
+        ns.db.textSize = value
+        if ns.Restyle then ns.Restyle() end
+    end },
+    backOpacity = { function() return ns.db.backOpacity end, function(value)
+        ns.db.backOpacity = value
+        if ns.Restyle then ns.Restyle() end
+    end },
     wheelSize = { function() return ns.db.wheelSize end, function(value) ns.db.wheelSize = value end },
 }
 ns.optionRows = ROWS
@@ -597,31 +606,53 @@ function ns.StyleNotice()
         close:SetScript("OnClick", function() notice:Hide() end)
         local text = Line(title, 12)
         text:SetText(L["NOTICE_WELCOME"])
-        -- The keyboard's size, the keyboard itself under the window as the preview: LB - + RB at the right.
-        local size = Text("GameFontNormal")
-        size:SetPoint("TOPLEFT", text, "BOTTOMLEFT", 0, -18)
-        -- right after the sentence, on its middle line: LB, minus, plus, RB
-        local smaller = Text()
-        smaller:SetPoint("LEFT", size, "RIGHT", 14, 0)
-        local function Step(name, label, by, after)
-            local button = CreateFrame("Button", name, notice, "UIPanelButtonTemplate")
-            button:SetSize(26, 22)
-            button:SetText(label)
-            button:SetPoint("LEFT", after, "RIGHT", 6, 0)
-            button:SetScript("OnClick", function()
-                ns.db.size = math.max(70, math.min(200, (ns.db.size or 100) + by))
-                size:SetText(L["NOTICE_SIZE"]:format(ns.db.size))
-                if ns.Restyle then ns.Restyle() end
-            end)
-            return button
+        -- A setting stepped by tens, the keyboard under the window as the preview: its sentence, then right after it
+        -- on its middle line the lower button's glyph, minus, plus and the higher one's.
+        local function Stepper(above, gap, spec)
+            local row = { line = Text("GameFontNormal"), less = Text(), more = Text() }
+            row.line:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -gap)
+            row.less:SetPoint("LEFT", row.line, "RIGHT", 14, 0)
+            function row.Tell()
+                row.line:SetText(L[spec.format]:format(ns.db[spec.key] or 100))
+                row.less:SetText(Glyph(spec.keys[1]))
+                row.more:SetText(Glyph(spec.keys[2]))
+            end
+            local function Step(name, label, by, after)
+                local button = CreateFrame("Button", name, notice, "UIPanelButtonTemplate")
+                button:SetSize(26, 22)
+                button:SetText(label)
+                button:SetPoint("LEFT", after, "RIGHT", 6, 0)
+                button:SetScript("OnClick", function()
+                    ns.db[spec.key] = math.max(spec.low, math.min(spec.high, (ns.db[spec.key] or 100) + by))
+                    row.Tell()
+                    if ns.Restyle then ns.Restyle() end
+                end)
+                return button
+            end
+            row.minus = Step(spec.names[1], "-", -10, row.less)
+            row.plus = Step(spec.names[2], "+", 10, row.minus)
+            row.more:SetPoint("LEFT", row.plus, "RIGHT", 6, 0)
+            return row
         end
-        local minus = Step("FlickChatNoticeSmaller", "-", -10, smaller)
-        local plus = Step("FlickChatNoticeLarger", "+", 10, minus)
-        local larger = Text()
-        larger:SetPoint("LEFT", plus, "RIGHT", 6, 0)
-        -- The keyboard's shape under the size, the same way: its name, Y, the button that turns to the other.
+        -- The keyboard's size on the triggers and its backing on the bumpers under them, as they sit on the pad;
+        -- the text's own size on the d-pad's left and right.
+        local STEPPERS = {
+            { key = "size", low = 70, high = 200, format = "NOTICE_SIZE", keys = { "PADLTRIGGER", "PADRTRIGGER" },
+                names = { "FlickChatNoticeSmaller", "FlickChatNoticeLarger" } },
+            { key = "backOpacity", low = 0, high = 100, format = "NOTICE_BACK", keys = { "PADLSHOULDER", "PADRSHOULDER" },
+                names = { "FlickChatNoticeBackLess", "FlickChatNoticeBackMore" } },
+            { key = "textSize", low = 70, high = 150, format = "NOTICE_TEXT_SIZE", keys = { "PADDLEFT", "PADDRIGHT" },
+                names = { "FlickChatNoticeTextSmaller", "FlickChatNoticeTextLarger" } },
+        }
+        local steppers, PRESSES, above = {}, {}, text
+        for i, spec in ipairs(STEPPERS) do
+            local row = Stepper(above, i == 1 and 18 or 14, spec)
+            steppers[i], above = row, row.line
+            PRESSES[spec.keys[1]], PRESSES[spec.keys[2]] = row.minus, row.plus
+        end
+        -- The keyboard's shape under them, the same way: its name, Y, the button that turns to the other.
         local shape = Text("GameFontNormal")
-        shape:SetPoint("TOPLEFT", size, "BOTTOMLEFT", 0, -14)
+        shape:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -14)
         local shapeKey = Text()
         shapeKey:SetPoint("LEFT", shape, "RIGHT", 14, 0)
         local turn = CreateFrame("Button", "FlickChatNoticeShape", notice, "UIPanelButtonTemplate")
@@ -665,9 +696,11 @@ function ns.StyleNotice()
             local section = classic or notice.switched
             close.text:SetText(L["NOTICE_KEY_CLOSE"]:format(Glyph("PAD2")))
             close:SetSize(close.text:GetStringWidth() + 4, 28)
-            size:SetText(L["NOTICE_SIZE"]:format(ns.db.size or 100))
-            smaller:SetText(Glyph("PADLSHOULDER"))
-            larger:SetText(Glyph("PADRSHOULDER"))
+            local rowsH = 0
+            for _, row in ipairs(steppers) do
+                row.Tell()
+                rowsH = rowsH + row.line:GetStringHeight() + 14
+            end
             shape:SetText(L["NOTICE_SHAPE"]:format(ns.ShapeName()))
             shapeKey:SetText(Glyph("PAD4"))
             turn:SetText(L["NOTICE_SHAPE_TURN"])
@@ -689,7 +722,8 @@ function ns.StyleNotice()
                 warn:SetText(L["NOTICE_SWAPPED"])
                 warn:SetTextColor(0.4, 0.9, 0.4)
             end
-            local height = 22 + title:GetStringHeight() + 12 + text:GetStringHeight() + 18 + size:GetStringHeight() + 14
+            -- the first row 18 under the welcome, the others and the shape 14 apart
+            local height = 22 + title:GetStringHeight() + 12 + text:GetStringHeight() + 4 + rowsH + 14
                 + shape:GetStringHeight() + 14 + note:GetStringHeight()
             if section then height = height + 16 + 1 + 14 + warn:GetStringHeight() + (classic and 14 + 36 or 0) end
             if not classic then height = height + 10 + 32 + math.max(0, label:GetStringHeight() - 18) end
@@ -711,8 +745,10 @@ function ns.StyleNotice()
         -- no pad presses itself: the switch needs a press the game counts as the player's, and a press the
         -- window took never reaches it (measured). The game's controller mode sets its own pad bindings over
         -- ours as it goes, so ours go back whenever it does. On IM style the window reads the pad itself.
-        local BOUND = { PAD1 = "FlickChatNoticeSwap", PAD2 = "FlickChatNoticeClose", PADLSHOULDER = "FlickChatNoticeSmaller",
-            PADRSHOULDER = "FlickChatNoticeLarger", PAD4 = "FlickChatNoticeShape" }
+        local BOUND = { PAD1 = "FlickChatNoticeSwap", PAD2 = "FlickChatNoticeClose", PAD4 = "FlickChatNoticeShape" }
+        for _, spec in ipairs(STEPPERS) do
+            BOUND[spec.keys[1]], BOUND[spec.keys[2]] = spec.names[1], spec.names[2]
+        end
         local function Bind()
             notice.binding = true
             for key, button in pairs(BOUND) do SetOverrideBindingClick(notice, true, key, button) end
@@ -742,12 +778,10 @@ function ns.StyleNotice()
                 Bind()
             end
         end
-        -- On IM style: the size, the box and closing are the window's own pad presses.
+        -- On IM style: the steps, the box and closing are the window's own pad presses.
         notice:SetScript("OnGamePadButtonDown", function(self, button)
-            if button == "PADLSHOULDER" then
-                minus:GetScript("OnClick")(minus)
-            elseif button == "PADRSHOULDER" then
-                plus:GetScript("OnClick")(plus)
+            if PRESSES[button] then
+                PRESSES[button]:GetScript("OnClick")(PRESSES[button])
             elseif button == "PAD3" then
                 check:SetChecked(not check:GetChecked())
                 check:GetScript("OnClick")(check)

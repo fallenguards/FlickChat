@@ -59,11 +59,12 @@ LESSON.roll, LESSON.stages = 4, { 2, 4, 5 }
 local LESSON_LINE_END, LESSON_LINE_START = { [4] = true, [8] = true }, { [5] = "LESSON_LINE2", [9] = "LESSON_LINE3" }
 -- A d-pad slot's direction word (DIR_n): up, left, right, down.
 local SLOT_DIR = { 1, 4, 2, 3 }
-local LESSON_ARM, LESSON_MIN_FLICKS, LESSON_FONT = 0.4, 8, 18
+local LESSON_ARM, LESSON_MIN_FLICKS = 0.4, 8
 local NAME_GROUP, NAME_KNOWN, NAME_PLACE = 0.002, 0.0003, 0.0005
 
--- Pixels on a 1080-line screen at size 100.
-local LETTER, GUESS, HINT, CHANNEL_FONT = 18, 18, 13, 14
+-- Text sizes in pixels on a 1080-line screen at size 100: base at text size 100, the rest at the player's (Restyle).
+local TEXT = { base = { letter = 18, guess = 18, hint = 13, channel = 14, lesson = 18 } }
+for key, size in pairs(TEXT.base) do TEXT[key] = size end
 -- The button guide is its own box above the keyboard (as the game's controller legend is); R3 shows or hides it,
 -- and a free line over the top right of the whole stack always says so.
 local TOGGLE_GAP = 4
@@ -71,8 +72,10 @@ local NOTHING = {}
 -- The guesses: a d-pad cross of button marks between the two sticks, each word reaching out from its own.
 local CELL_H, HUB_R, DOT, GAP, PAD = 34, 20, 12, 6, 16
 local CROSS_W, CROSS_H, MARK_X, MARK_Y = 250, 104, 18, 16
--- The middle's width: the room the guess words have, by the settings page's percent.
-local function CrossW() return CROSS_W * (ns.db.wordRoom or 100) / 100 end
+-- The middle's width: the room the guess words have, by the settings page's percent, wider for larger text.
+local function CrossW()
+    return CROSS_W * (ns.db.wordRoom or 100) / 100 * math.max(1, (ns.db.textSize or 100) / 100)
+end
 -- A side word too long for its arm shrinks to fit, down to this share of its size; past that it is cut.
 local SIDE_SHRINK = 2 / 3
 -- The letter boxes and their hub: the game's own controller menu art (flat boxes where a client lacks it).
@@ -1250,7 +1253,7 @@ local function PaintRose(rose, st)
         local digit = st.base + dir
         local pick = ring and ring[digit]
         if rose.wheel ~= (ring ~= nil) then
-            cell.text:SetFont(STANDARD_TEXT_FONT, ring and CHANNEL_FONT or LETTER, "OUTLINE")
+            cell.text:SetFont(STANDARD_TEXT_FONT, ring and TEXT.channel or TEXT.letter, "OUTLINE")
         end
         if ring then
             cell.text:SetText(pick and pick.label or "")
@@ -1638,9 +1641,9 @@ Paint = function()
         local word = entry and entry.label or not list and S.slots[i]
         slot:SetText(word and (entry and word or Cap(word)) or "")
         if slot.room then
-            local size = GUESS
+            local size = TEXT.guess
             local width = slot:GetStringWidth()
-            if width > slot.room then size = math.max(math.floor(GUESS * SIDE_SHRINK), math.floor(GUESS * slot.room / width)) end
+            if width > slot.room then size = math.max(math.floor(size * SIDE_SHRINK), math.floor(size * slot.room / width)) end
             if slot.size ~= size then
                 slot:SetFont(STANDARD_TEXT_FONT, size, "OUTLINE")
                 slot.size = size
@@ -1680,7 +1683,7 @@ Paint = function()
         kb.marks[i]:SetAlpha(word and 1 or 0.35)
     end
     PaintPrompts()
-    local size = S.lesson and LESSON_FONT or HINT
+    local size = S.lesson and TEXT.lesson or TEXT.hint
     if kb.hintSize ~= size then
         kb.hint:SetFont(STANDARD_TEXT_FONT, size, "OUTLINE")
         kb.hintSize = size
@@ -1814,9 +1817,20 @@ function ns.Restyle()
     if not kb then return end
     local size = (ns.db.size or 100) / 100
     kb:SetScale(768 / 1080 * size / UIParent:GetEffectiveScale())
+    -- The text's own size: the boxes grow to hold larger letters, the guesses' middle to hold larger words.
+    local textScale = (ns.db.textSize or 100) / 100
+    for key, base in pairs(TEXT.base) do TEXT[key] = math.floor(base * textScale + 0.5) end
+    local cellH = math.max(CELL_H, TEXT.letter + 16)
+    local crossH = CROSS_H + 2.5 * math.max(0, TEXT.guess - TEXT.base.guess)
+    -- the dark backing at the player's opacity, none at 0; the border stays solid
+    local opacity = (ns.db.backOpacity or 90) / 100
+    for _, frame in ipairs({ kb, kb.guide }) do
+        frame.back:SetAlpha(opacity)
+        frame.back:SetShown(opacity > 0)
+    end
     local font = STANDARD_TEXT_FONT
     local widest = 0
-    kb.measure:SetFont(font, LETTER, "OUTLINE")
+    kb.measure:SetFont(font, TEXT.letter, "OUTLINE")
     for _, set in ipairs({ ns.LAYOUTS[ns.db.layout] or ns.LAYOUTS.letters, SYMBOLS }) do
         for _, letters in ipairs(set) do
             kb.measure:SetText(letters:upper())
@@ -1824,8 +1838,8 @@ function ns.Restyle()
         end
     end
     local cellW = math.ceil(widest) + 20
-    local reachX, reachY = HUB_R + 6 + cellW / 2, HUB_R + 4 + CELL_H / 2
-    local roseW, roseH = 2 * (HUB_R + 6 + cellW), 2 * (HUB_R + 4 + CELL_H)
+    local reachX, reachY = HUB_R + 6 + cellW / 2, HUB_R + 4 + cellH / 2
+    local roseW, roseH = 2 * (HUB_R + 6 + cellW), 2 * (HUB_R + 4 + cellH)
     -- Wide: a stick either side of the guesses. Stacked: the sticks side by side and the guesses over or under
     -- them, with the keyboard's whole width for their own. middle: the guess cross's own, down from the
     -- keyboard's top.
@@ -1835,15 +1849,15 @@ function ns.Restyle()
     local stacked = ns.Stacked()
     if stacked then
         crossW = roseW * 2 + between
-        kb.bodyH, kb.baseW = roseH + GAP + CROSS_H, PAD * 2 + crossW
+        kb.bodyH, kb.baseW = roseH + GAP + crossH, PAD * 2 + crossW
         roseX = (between + roseW) / 2
         if stacked == "above" then
-            middle, roseY = -(PAD + CROSS_H / 2), -(PAD + CROSS_H + GAP + roseH / 2)
+            middle, roseY = -(PAD + crossH / 2), -(PAD + crossH + GAP + roseH / 2)
         else
-            roseY, middle = -(PAD + roseH / 2), -(PAD + roseH + GAP + CROSS_H / 2)
+            roseY, middle = -(PAD + roseH / 2), -(PAD + roseH + GAP + crossH / 2)
         end
     else
-        kb.bodyH, kb.baseW = math.max(roseH, CROSS_H), kb.wideW
+        kb.bodyH, kb.baseW = math.max(roseH, crossH), kb.wideW
         middle = -(PAD + kb.bodyH / 2)
         roseX, roseY = crossW / 2 + GAP + roseW / 2, middle
     end
@@ -1854,16 +1868,16 @@ function ns.Restyle()
         rose:ClearAllPoints()
         rose:SetPoint("CENTER", kb, "TOP", (i == 1 and -1 or 1) * roseX, roseY)
         for dir, cell in ipairs(rose.cells) do
-            cell:SetSize(cellW, CELL_H)
+            cell:SetSize(cellW, cellH)
             cell:SetPoint("CENTER", rose, "CENTER", spots[dir][1], spots[dir][2])
-            cell.text:SetFont(font, S.phrases and CHANNEL_FONT or LETTER, "OUTLINE")
+            cell.text:SetFont(font, S.phrases and TEXT.channel or TEXT.letter, "OUTLINE")
             cell.text:SetTextColor(LETTER_COLOR[1], LETTER_COLOR[2], LETTER_COLOR[3])
             cell.text:SetWidth(cellW - 6)
             cell.text:SetWordWrap(false)
         end
         for k, label in ipairs(rose.picks) do
             local angle = math.rad((k - 1) * 45)
-            label:SetFont(font, LETTER + 4, "OUTLINE")
+            label:SetFont(font, TEXT.letter + 4, "OUTLINE")
             label:SetTextColor(1, 1, 1)
             label:SetPoint("CENTER", rose, "CENTER", math.sin(angle) * (reachX + 4), math.cos(angle) * (reachY + 4))
         end
@@ -1874,12 +1888,13 @@ function ns.Restyle()
         { "TOP", "BOTTOM", 0, -2 } }
     for i, slot in ipairs(kb.slots) do
         local mark = kb.marks[i]
-        mark:SetFont(font, GUESS, "")
+        -- the d-pad marks are icons: the keyboard's size, not the text's
+        mark:SetFont(font, TEXT.base.guess, "")
         mark:SetText(Glyph(SLOT_KEYS[i]))
         mark:ClearAllPoints()
         mark:SetPoint("CENTER", kb, "TOP", markSpots[i][1], middle + markSpots[i][2])
-        slot:SetFont(font, GUESS, "OUTLINE")
-        slot.size = GUESS
+        slot:SetFont(font, TEXT.guess, "OUTLINE")
+        slot.size = TEXT.guess
         slot:ClearAllPoints()
         -- Up and down have the cross's whole width; a side word its half past the mark.
         local width = (i == 1 or i == 4) and crossW or crossW / 2 - MARK_X - 10
@@ -1889,8 +1904,8 @@ function ns.Restyle()
         slot:SetPoint(reach[i][1], mark, reach[i][2], reach[i][3], reach[i][4])
         slot:SetWordWrap(false)
     end
-    kb.hint:SetFont(font, HINT, "OUTLINE")
-    kb.hintSize = HINT
+    kb.hint:SetFont(font, TEXT.hint, "OUTLINE")
+    kb.hintSize = TEXT.hint
     for _, piece in ipairs({ kb.guide, kb.bar, kb.hints }) do
         piece:SetIgnoreParentScale(true)
         piece:SetScale(UIParent:GetEffectiveScale())
@@ -2030,12 +2045,14 @@ local function GameChatButtonsBack()
     end
 end
 
--- A dark backing in the game's dialog border, as its controller legend box is drawn.
+-- A dark backing (frame.back) in the game's dialog border, as its controller legend box is drawn. Solid in itself:
+-- its alpha is the whole of its see-through (the keyboard's, the player's opacity).
 local function Dress(frame)
-    local bg = frame:CreateTexture(nil, "BACKGROUND")
-    bg:SetPoint("TOPLEFT", 4, -4)
-    bg:SetPoint("BOTTOMRIGHT", -4, 4)
-    bg:SetColorTexture(0.03, 0.03, 0.04, 0.92)
+    frame.back = frame:CreateTexture(nil, "BACKGROUND")
+    frame.back:SetPoint("TOPLEFT", 4, -4)
+    frame.back:SetPoint("BOTTOMRIGHT", -4, 4)
+    frame.back:SetColorTexture(0.03, 0.03, 0.04, 1)
+    frame.back:SetAlpha(0.92)
     if NineSliceUtil and NineSliceLayouts and NineSliceLayouts.Dialog then
         NineSliceUtil.ApplyLayoutByName(frame, "Dialog")
     end
