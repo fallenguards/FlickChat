@@ -383,11 +383,14 @@ Is("nothing was sent", #sent, count)
 
 -- the first-login window comes up with the keyboard under it as the preview
 Hidden()
-InputUtil = { IsGamepadUIEnabled = function() return true end }
+local padUI = false
+InputUtil = { IsGamepadUIEnabled = function() return padUI end }
 cvars.chatStyle = "im"
 ns.db.welcomed = nil
+-- the game's controller interface off (its setting at keyboard and mouse) is no reason to skip it
 ns.events.scripts.OnEvent(ns.events, "PLAYER_LOGIN")
-Is("a new player gets the window", _G.FlickChatNotice ~= nil and _G.FlickChatNotice.shown, true)
+Is("a new player gets the window at login, the game's controller interface off", _G.FlickChatNotice ~= nil and _G.FlickChatNotice.shown, true)
+padUI = true
 Is("with the keyboard as the preview", kb.shown, true)
 -- Y in the window turns the keyboard's shape, the preview with it
 local notice = _G.FlickChatNotice

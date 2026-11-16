@@ -156,7 +156,21 @@ local function WarnWheelOff()
     end
 end
 
+-- Every new player once at login, whatever the game's interface setting: the keyboard's size and shape. And the
+-- chat style when it is the one the keyboard cannot open in, at each login until changed.
+local function Welcome()
+    if ns.db.welcomed and not ns.NeedsIMStyle() then return end
+    -- the window holds a secure button: a fight waits
+    if InCombatLockdown() then return ns.events:RegisterEvent("PLAYER_REGEN_ENABLED") end
+    ns.StyleNotice()
+end
+
 ns.events:SetScript("OnEvent", function(self, event, arg1, arg2)
+    if event == "PLAYER_REGEN_ENABLED" then
+        self:UnregisterEvent(event)
+        Welcome()
+        return
+    end
     if event == "GAME_PAD_ACTIVE_CHANGED" then
         if ns.PadActive then ns.PadActive(arg1) end
         -- The controller picked up after login: looked at again then.
@@ -197,10 +211,7 @@ ns.events:SetScript("OnEvent", function(self, event, arg1, arg2)
         end
         -- The game's controller mode shows chat's typing line only with the IM chat style: a notice says so.
         db.imStyleTold = nil
-        -- Every new player once, in the game's controller mode: the keyboard's size, and the chat style if it
-        -- is the one the keyboard cannot open in. That one is told at each login until it is changed.
-        local controller = InputUtil and InputUtil.IsGamepadUIEnabled and InputUtil.IsGamepadUIEnabled()
-        if ns.NeedsIMStyle() or (controller and not db.welcomed) then ns.StyleNotice() end
+        Welcome()
         -- Other addons set their chat windows up as they log in too: looked at once they have.
         C_Timer.After(5, WarnWheelOff)
         return
