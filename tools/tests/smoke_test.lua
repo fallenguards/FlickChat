@@ -165,8 +165,16 @@ local function Obj(parent)
     return setmetatable(o, { __index = function(t, k)
         if generic[k] then return generic[k] end
         if k == "CreateTexture" or k == "CreateFontString" or k == "CreateMaskTexture" then
-            return function(self) local c = Obj(self) c.shown = true return c end
+            return function(self)
+                local c = Obj(self)
+                c.shown = true
+                self.regions = self.regions or {}
+                self.regions[#self.regions + 1] = c
+                return c
+            end
         end
+        if k == "RegisterEvent" then return function(self, event) self.events = self.events or {} self.events[event] = true end end
+        if k == "UnregisterEvent" then return function(self, event) if self.events then self.events[event] = nil end end end
         -- any other method of the game's: there on every frame, and it wants its frame (a field of ours named
         -- like one, called with a dot, is an error in the game)
         if k:match("^%u") then
@@ -392,9 +400,24 @@ local padUI = false
 InputUtil = { IsGamepadUIEnabled = function() return padUI end }
 cvars.chatStyle = "im"
 ns.db.welcomed = nil
+-- before the game counts the controller in use, it names its buttons by number (Y is 4)
+local padNamed = false
+local BindingNames = GetBindingText
+GetBindingText = function(key) if padNamed then return BindingNames(key) end return (key:gsub("^PAD", "")) end
 -- the game's controller interface off (its setting at keyboard and mouse) is no reason to skip it
 ns.events.scripts.OnEvent(ns.events, "PLAYER_LOGIN")
 Is("a new player gets the window at login, the game's controller interface off", _G.FlickChatNotice ~= nil and _G.FlickChatNotice.shown, true)
+local function NoticeSays(text)
+    for _, region in ipairs(_G.FlickChatNotice.regions or {}) do
+        if region.text == text then return true end
+    end
+    return false
+end
+Is("the window waits for the game to count the controller in use", (_G.FlickChatNotice.events or {}).GAME_PAD_ACTIVE_CHANGED, true)
+padNamed = true
+_G.FlickChatNotice.scripts.OnEvent(_G.FlickChatNotice, "GAME_PAD_ACTIVE_CHANGED", true)
+Is("and then names Y as the game's Y, not 4", NoticeSays("[PAD4]") and not NoticeSays("4"), true)
+GetBindingText = BindingNames
 padUI = true
 Is("with the keyboard as the preview", kb.shown, true)
 -- Y in the window turns the keyboard's shape, the preview with it

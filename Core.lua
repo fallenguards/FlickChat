@@ -811,11 +811,15 @@ function ns.StyleNotice()
         notice:SetScript("OnShow", function(self)
             self.switched = false
             check:SetChecked(ROWS.hideLine[1]())
+            -- Button names read before the game counts the controller in use are plain numbers (Y as 4): told
+            -- again once it does.
+            self:RegisterEvent("GAME_PAD_ACTIVE_CHANGED")
             self.Pad(true)
             if ns.PreviewKeyboard then ns.PreviewKeyboard(self, Lift) end
         end)
         notice:SetScript("OnHide", function(self)
             ns.db.welcomed = true
+            self:UnregisterEvent("GAME_PAD_ACTIVE_CHANGED")
             self.Pad(false)
             if ns.PreviewKeyboard then ns.PreviewKeyboard() end
         end)
