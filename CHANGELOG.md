@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0] - 2026-11-16
+
+### Added
+- Russian typing: the keyboard now guesses words in Russian, with all 33 letters including ё. Russian games use it by default, and Typing language in the settings picks it anywhere else. FlickChat's own text is in Russian on a Russian game too. Thanks to exdis for the Russian words and translation.
+
+### Changed
+- The keyboard under the first setup window shows guessed words in your typing language.
+- Typing practice also offers words with accented letters.
+
+### Fixed
+- The first setup window shows the controller's button icons from the start, not numbers (Y as 4) until a button is pressed.
+
 ## [1.5.0] - 2026-11-16
 
 ### Added

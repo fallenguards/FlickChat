@@ -2,7 +2,7 @@
 ## Title: FlickChat: Deutsch
 ## Notes: German words for FlickChat's controller keyboard. The game loads them only while you type in German.
 ## Author: fallenguard
-## Version: 1.5.0
+## Version: 1.6.0
 ## Category: Chat
 ## Group: FlickChat
 ## Dependencies: FlickChat
