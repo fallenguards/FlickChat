@@ -200,6 +200,7 @@ local function Welcome()
 end
 
 ns.events:SetScript("OnEvent", function(self, event, arg1, arg2)
+    if event == "CHAT_MSG_CHANNEL_NOTICE" then return ns.JoinHeard() end
     if event == "PLAYER_REGEN_ENABLED" then
         self:UnregisterEvent(event)
         Welcome()
@@ -931,8 +932,8 @@ local function Named(key) return _G["CHAT_MSG_" .. key] or key end
 local RECENT, CLOSE_BY, FRIEND, GUILDIE = 0.5, 0.4, 0.3, 0.1
 
 -- The channel wheel's pages, eight slices each from the top going clockwise: where to talk, who to whisper (the
--- target, the newest whisper partners, friends online, then a name search), the numbered channels. A slice the player
--- cannot use now stays in its place, marked off.
+-- target, the newest whisper partners, friends online, then a name search), the numbered channels and the zone's
+-- ones to join. A slice the player cannot use now stays in its place, marked off.
 function ns.WheelPages()
     local L = ns.L
     local instance, guild = IsInGroup(LE_PARTY_CATEGORY_INSTANCE), IsInGuild()
@@ -974,8 +975,14 @@ function ns.WheelPages()
     for i = 1, #list, 3 do
         if not list[i + 2] and #channels < 8 then
             channels[#channels + 1] = { label = list[i] .. ". " .. list[i + 1], chatType = "CHANNEL",
-                channelTarget = list[i] }
+                channelTarget = list[i], channelName = list[i + 1] }
         end
+    end
+    -- a join's button and bindings are a fight's to refuse
+    local full = InCombatLockdown() or ChatFrameUtil.CanAddChannel and not ChatFrameUtil.CanAddChannel()
+    for _, zone in ipairs(ns.ChannelsToJoin()) do
+        if #channels >= 8 then break end
+        channels[#channels + 1] = { label = L["JOIN_SLICE"]:format(zone), chatType = "CHANNEL", join = zone, off = full }
     end
     -- The addon's own page: its settings window, and the keyboard's place.
     local own = { { label = L["SETTINGS_SLICE"], settings = true }, { label = L["MOVE_SLICE"], move = true } }
@@ -1046,10 +1053,107 @@ function ns.SwitchChannel(box, pick)
 end
 
 function ns.IsChannel(box, pick)
-    if not pick or not box.GetChatType or box:GetChatType() ~= pick.chatType then return false end
+    if not pick or pick.join or not box.GetChatType or box:GetChatType() ~= pick.chatType then return false end
     if pick.tellTarget then return box:GetTellTarget() == pick.tellTarget end
     if pick.channelTarget then return tonumber(box:GetChannelTarget()) == pick.channelTarget end
     return true
+end
+
+-- The zone's own channels by their rows in the game's ChatChannels table, the ones that join by themselves and
+-- LookingForGroup: General, Trade, LocalDefense, LookingForGroup, Services, TradeLocal, OOC. The server's list
+-- also holds test discussions and Chromie Time, no player's pick.
+local ZONE_CHANNELS = { 1, 2, 22, 26, 42, 46, 47 }
+
+-- Those the server has here and the player is not in.
+function ns.ChannelsToJoin()
+    local here, list = {}, {}
+    for _, name in ipairs(EnumerateServerChannels and { EnumerateServerChannels() } or {}) do here[name] = true end
+    for _, id in ipairs(ZONE_CHANNELS) do
+        local name = C_ChatInfo.GetChannelShortcutForChannelID(id)
+        if name and here[name] and (GetChannelName(name) or 0) == 0 then list[#list + 1] = name end
+    end
+    return list
+end
+
+-- A join waits for A: the game's own /join runs from a secure button on the player's press, so the chat window
+-- lists the channel in the game's name (written by our code, its lines would run in ours). Any other pad button
+-- gives up. Bindings and the button's text are a fight's to refuse: no join waits in one.
+local JOIN_KEYS = { "PAD2", "PAD3", "PAD4", "PADLSHOULDER", "PADRSHOULDER", "PADLTRIGGER", "PADRTRIGGER", "PADDUP",
+    "PADDDOWN", "PADDLEFT", "PADDRIGHT", "PADLSTICK", "PADRSTICK", "PADBACK", "PADFORWARD" }
+local join = {}
+
+function ns.DisarmJoin()
+    local armed = join.armed
+    join.armed = nil
+    if not join.cancel then return armed end
+    if InCombatLockdown() then
+        join.cancel:RegisterEvent("PLAYER_REGEN_ENABLED")
+    else
+        ClearOverrideBindings(join.cancel)
+    end
+    return armed
+end
+
+-- pressed() once A has run the join, gaveUp() on any other button; false in a fight.
+function ns.ArmJoin(name, pressed, gaveUp)
+    if InCombatLockdown() then return false end
+    if not join.button then
+        -- starts shown: binding targets, a pixel off the screen, as ClassicUIForever's pad buttons
+        join.button = CreateFrame("Button", "FlickChatJoin", UIParent, "SecureActionButtonTemplate")
+        join.cancel = CreateFrame("Button", "FlickChatJoinCancel", UIParent)
+        for _, target in ipairs({ join.button, join.cancel }) do
+            target:SetSize(1, 1)
+            target:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -500, 500)
+            target:EnableMouse(false)
+        end
+        join.button:RegisterForClicks("AnyDown")
+        join.button:SetAttribute("type", "macro")
+        join.button:SetAttribute("useOnKeyDown", true)
+        join.button:SetScript("PostClick", function()
+            local armed = ns.DisarmJoin()
+            if armed then armed.pressed() end
+        end)
+        join.cancel:SetScript("OnClick", function()
+            local armed = ns.DisarmJoin()
+            if armed then armed.gaveUp() end
+        end)
+        join.cancel:SetScript("OnEvent", function(self)
+            self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+            if not join.armed then ClearOverrideBindings(self) end
+        end)
+    end
+    join.armed = { pressed = pressed, gaveUp = gaveUp }
+    join.button:SetAttribute("macrotext", "/join " .. name)
+    SetOverrideBindingClick(join.cancel, true, "PAD1", "FlickChatJoin")
+    for _, key in ipairs(JOIN_KEYS) do SetOverrideBindingClick(join.cancel, true, key, "FlickChatJoinCancel") end
+    return true
+end
+
+-- done(number) once the game has numbered the channel, done() if it has not after a few seconds.
+local awaiting
+local function AwaitEnd(id)
+    local done = awaiting.done
+    awaiting.timer:Cancel()
+    awaiting = nil
+    ns.events:UnregisterEvent("CHAT_MSG_CHANNEL_NOTICE")
+    done(id)
+end
+
+function ns.AwaitChannel(name, done)
+    if awaiting then awaiting.timer:Cancel() end
+    awaiting = { name = name, done = done }
+    awaiting.timer = C_Timer.NewTimer(5, function()
+        local id = GetChannelName(name) or 0
+        AwaitEnd(id ~= 0 and id or nil)
+    end)
+    ns.events:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
+    local id = GetChannelName(name) or 0
+    if id ~= 0 then AwaitEnd(id) end
+end
+
+function ns.JoinHeard()
+    local id = awaiting and GetChannelName(awaiting.name)
+    if id and id ~= 0 then AwaitEnd(id) end
 end
 
 SLASH_FLICKCHAT1 = "/flick"

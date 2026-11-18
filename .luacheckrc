@@ -28,4 +28,5 @@ read_globals = {
     "GetSubZoneText", "GetChannelList", "GENERAL_CHAT_DOCK", "GamepadPersistentInputLegend", "FCFDock_SelectWindow",
     "Enum", "debugstack", "IsUsingGamepad", "OKAY", "GetNumFriends", "date",
     "IsShiftKeyDown", "IsControlKeyDown", "IsAltKeyDown", "C_CVar",
+    "EnumerateServerChannels", "GetChannelName", "LeaveChannelByName",
 }

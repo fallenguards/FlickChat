@@ -74,6 +74,12 @@ function UnitIsPlayer(u) return u == "target" end
 function UnitIsUnit() return false end
 function GetUnitName() return "Varian" end
 function GetChannelList() return 1, "General", false, 2, "Trade", false, 3, "Muted", true end
+-- the zone's channels: two to join and one no player's pick; a join is numbered only when the test says so
+local channelNumbers = { General = 1, Trade = 2, Muted = 3 }
+function GetChannelName(name) return channelNumbers[name] or 0 end
+function EnumerateServerChannels() return "General", "Trade", "LookingForGroup", "ChromieTime", "Services" end
+local channelsLeft = {}
+function LeaveChannelByName(name) channelsLeft[#channelsLeft + 1] = name end
 CHAT_MSG_SAY, CHAT_MSG_PARTY, CHAT_MSG_GUILD, CHAT_MSG_RAID = "Say", "Party", "Guild", "Raid"
 local tells = { "Jaina", "Thrall" }
 ChatFrameUtil = {
@@ -105,7 +111,11 @@ Settings = {
 }
 addonSent = {}
 C_ChatInfo = { RegisterAddonMessagePrefix = function() end, InChatMessagingLockdown = function() return false end,
-    SendAddonMessage = function(prefix, text, kind) addonSent[#addonSent + 1] = prefix .. " " .. text .. " " .. kind end }
+    SendAddonMessage = function(prefix, text, kind) addonSent[#addonSent + 1] = prefix .. " " .. text .. " " .. kind end,
+    GetChannelShortcutForChannelID = function(id)
+        return ({ [1] = "General", [2] = "Trade", [22] = "LocalDefense", [26] = "LookingForGroup", [42] = "Services",
+            [36] = "ChromieTime" })[id] or ""
+    end }
 time = os.time
 C_AddOns = { GetAddOnMetadata = function(_, field) return field == "Version" and "1.2.0" or "FlickChat" end,
     -- a language folder (Packs/<name>): its files run, as the game loads it on demand
@@ -168,6 +178,8 @@ function generic.SetAlpha(self, alpha) self.alpha = alpha end
 function generic.SetColorTexture(self, r, g, b, a) self.color = { r, g, b, a or 1 } end
 function generic.SetPoint(self, ...) for i = 1, select("#", ...) do local v = select(i, ...) assert(v ~= nil or i > 1, "nil point arg") end end
 function generic.SetTextColor(self, r, g, b) assert(r and g and b, "color") end
+function generic.SetAttribute(self, key, value) self.attrs = self.attrs or {} self.attrs[key] = value end
+function generic.EnableGamePadButton(self, on) self.padButtons = on end
 local function Obj(parent)
     local o = { scripts = {}, shown = false, text = "", parent = parent }
     return setmetatable(o, { __index = function(t, k)
@@ -309,6 +321,7 @@ legend.IsForbidden = function() return false end
 box.chatFrame = setmetatable({ footer = { inputLegend = legend, isShown = true } }, { __index = function(_, k)
     if k == "IsForbidden" then return function() return false end end
     if k == "GetFrameStrata" then return function() return "LOW" end end
+    if k == "GetID" then return function() return 1 end end
     return generic[k] or function() end
 end })
 
@@ -345,6 +358,115 @@ Is("X leaves the symbols page", T.state.symbols, false)
 Press("PAD3")
 Press("PADRTRIGGER")
 Is("RT leaves the symbols page", T.state.symbols, false)
+Press("PAD2")
+
+-- a zone channel not joined: the Channels page offers it; letting go asks on the wheel, A runs the game's own
+-- /join, and the line types there once the game has numbered the channel
+local function WheelTo(title)
+    for _ = 1, 4 do
+        local w = T.state.wheel
+        if w.pages[w.page].title == title then return w.pages[w.page].picks end
+        Press("PADRSHOULDER")
+    end
+    return {}
+end
+local function WheelFlick(x, y)
+    kb.scripts.OnGamePadStick(kb, "Left", x, y, 1)
+    now = now + 0.05
+    kb.scripts.OnGamePadStick(kb, "Left", 0, 0, 0)
+    now = now + 0.2
+end
+local function JoinArmed()
+    Press("PAD4")
+    local picks = WheelTo("Channels")
+    WheelFlick(1, 0)
+    return picks
+end
+Open()
+local picks = JoinArmed()
+local wheelFrame = T.Wheel()
+Is("the Channels page offers a channel not joined", picks[3] and picks[3].label, "Join LookingForGroup")
+Is("and the next one", picks[4] and picks[4].label, "Join Services")
+Is("a channel the server lists that is no player's pick is left off", #picks, 4)
+Is("letting go on it keeps the wheel up to ask", T.state.wheel ~= nil, true)
+Has("the wheel asks", wheelFrame.ask.text, "Join LookingForGroup?")
+Is("over its middle, in the title's place", wheelFrame.ask.shown and not wheelFrame.title.shown, true)
+Has("with A to join", wheelFrame.answer.text, "[PAD1]")
+Has("and B to go back", wheelFrame.answer.text, "[PAD2]")
+Is("the other labels make room", wheelFrame.slices[1].label.shown, false)
+local joinButton, joinCancel = _G.FlickChatJoin, _G.FlickChatJoinCancel
+Is("the game's own /join waits on the button", joinButton and joinButton.attrs.macrotext, "/join LookingForGroup")
+Is("for the press of A", joinButton and joinButton.attrs.useOnKeyDown, true)
+Is("A is bound to it", overrides.PAD1, "FlickChatJoin")
+Is("any other button gives up", overrides.PAD2 == "FlickChatJoinCancel" and overrides.PADBACK == "FlickChatJoinCancel", true)
+Is("the keyboard lets the pad's buttons go meanwhile", kb.padButtons, false)
+local typedBefore = box.text
+Flick(1)
+Is("the sticks type nothing meanwhile", box.text, typedBefore)
+Is("the line stays put", box.attr.channelTarget == 4, false)
+joinButton.scripts.PostClick(joinButton, "LeftButton", true)
+Is("A closes the wheel", T.state.wheel, nil)
+Is("takes the bindings away", next(overrides), nil)
+Is("and gives the keyboard the pad's buttons again", kb.padButtons, true)
+Is("the game's channel notices are heard until the channel is numbered", ns.events.events.CHAT_MSG_CHANNEL_NOTICE, true)
+channelNumbers.LookingForGroup = 4
+ns.events.scripts.OnEvent(ns.events, "CHAT_MSG_CHANNEL_NOTICE", "YOU_CHANGED")
+Is("then the line types there", box.header, "CHANNEL:4")
+Is("and the notices are let go", ns.events.events.CHAT_MSG_CHANNEL_NOTICE, nil)
+Is("a channel to join is never the one typed in", ns.IsChannel(box, { chatType = "CHANNEL", join = "Services" }), false)
+picks = JoinArmed()
+Is("a joined channel leaves the slices to join", picks[3] and picks[3].label, "Join Services")
+joinCancel.scripts.OnClick(joinCancel)
+Is("another button goes back to the wheel", T.state.wheel ~= nil and T.state.wheel.confirm == nil, true)
+Is("with its labels", wheelFrame.slices[1].label.shown and wheelFrame.title.shown and not wheelFrame.ask.shown, true)
+Is("and takes the bindings away", next(overrides), nil)
+Is("the keyboard has the pad's buttons again", kb.padButtons, true)
+Is("and the line stays where it was", box.header, "CHANNEL:4")
+Press("PAD2")
+JoinArmed()
+joinButton.scripts.PostClick(joinButton, "LeftButton", true)
+local joinSaid = {}
+local printBefore = print
+print = function(text) joinSaid[#joinSaid + 1] = text end
+for i = #timers, 1, -1 do
+    -- the newest live timer is the wait for the number
+    if type(timers[i]) == "table" and not timers[i].dead then timers[i].fn() break end
+end
+print = printBefore
+Has("a channel the game never numbers is said", joinSaid[1], "could not join Services")
+Is("and the line stays where it was", box.header, "CHANNEL:4")
+JoinArmed()
+generic.Hide(box)
+Is("chat shut while the wheel asks takes the bindings away", next(overrides), nil)
+Is("and the join with them", T.state.joinWait, nil)
+box.attr.chatType, box.attr.channelTarget = "SAY", nil
+
+-- a channel the player is in: pointing at it, X asks to leave it on the wheel; A leaves, and a line typed there
+-- goes to Say
+Open()
+box.attr.chatType, box.attr.channelTarget = "CHANNEL", 1
+Press("PAD4")
+WheelTo("Channels")
+kb.scripts.OnGamePadStick(kb, "Left", 0, 1, 1)
+Has("pointing at a channel says X leaves it", wheelFrame.info.text, "[PAD3]")
+Press("PAD3")
+Has("X asks on the wheel", wheelFrame.ask.text, "Leave General?")
+Has("with A to leave", wheelFrame.answer.text, "[PAD1]")
+Press("PAD2")
+Is("B goes back to the wheel", T.state.wheel ~= nil and T.state.wheel.confirm == nil, true)
+Is("leaving nothing", #channelsLeft, 0)
+kb.scripts.OnGamePadStick(kb, "Left", 0, 0.9, 0.9)
+Press("PAD3")
+Press("PAD1")
+Is("A leaves it", channelsLeft[#channelsLeft], "General")
+Is("and closes the wheel", T.state.wheel, nil)
+Is("the line typed there goes to Say", box.attr.chatType, "SAY")
+local held = box.text
+kb.scripts.OnGamePadStick(kb, "Left", 0, 1, 1)
+kb.scripts.OnGamePadStick(kb, "Left", 0, 0, 0)
+Is("the stick still out as the wheel went types nothing", box.text, held)
+Flick(1)
+Is("once back at rest it types again", box.text ~= held, true)
 Press("PAD2")
 
 -- LT held erases word by word, from its press and release (the game's controller interface)

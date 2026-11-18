@@ -703,8 +703,14 @@ end
 local function OnStick(_, which, x, y, len)
     local st = sticks[which]
     if not st or not box then return end
+    st.len = len
+    if S.joinWait then return end
     if S.move then return Move.Stick(which, x, y, len) end
     if S.wheel then return WheelStick(which, x, y) end
+    if st.rest then
+        if len > ns.db.rearm then return end
+        st.rest = nil
+    end
     st.x, st.y = x, y
     if probe then Note(string.format("%s %.2f %.2f %.2f", which, x, y, len)) end
     local arm = S.lesson and LESSON_ARM or ns.db.arm
@@ -1053,32 +1059,57 @@ local function BuildWheel()
     wheel.info:SetPoint("TOPLEFT", wheel.bg, "BOTTOMLEFT", 0, -6)
     wheel.info:SetPoint("TOPRIGHT", wheel.bg, "BOTTOMRIGHT", 0, -6)
     wheel.info:SetWordWrap(true)
+    -- A join or a leave asks on the wheel itself, over its middle: the question, then A and B.
+    wheel.ask = wheel:CreateFontString(nil, "OVERLAY")
+    wheel.ask:SetFont(STANDARD_TEXT_FONT, 28, "OUTLINE")
+    wheel.ask:SetTextColor(YELLOW[1], YELLOW[2], YELLOW[3])
+    wheel.ask:SetPoint("LEFT", wheel.bg, "LEFT", 70, 34)
+    wheel.ask:SetPoint("RIGHT", wheel.bg, "RIGHT", -70, 34)
+    wheel.ask:SetWordWrap(true)
+    wheel.answer = wheel:CreateFontString(nil, "OVERLAY")
+    wheel.answer:SetFont(STANDARD_TEXT_FONT, 24, "OUTLINE")
+    wheel.answer:SetPoint("TOP", wheel.ask, "BOTTOM", 0, -16)
     wheel:Hide()
 end
 
 local function PaintWheel()
     local w = S.wheel
     local picks = w.pages[w.page].picks
+    -- asking: the slice asked about stays lit, the other labels give the question room
+    local ask = w.confirm
     for i, slice in ipairs(wheel.slices) do
         local pick = picks[i]
         slice.label:SetText(pick and pick.label or "")
+        slice.label:SetShown(not ask)
         local color = (not pick or pick.off) and OFF_COLOR or ns.IsChannel(box, pick) and YELLOW or PICK_COLOR
         slice.label:SetTextColor(color[1], color[2], color[3])
         slice.off:SetShown(pick ~= nil and pick.off == true)
     end
-    local lit = w.at > 0 and picks[w.at]
-    if w.at > 0 then
-        local slice = wheel.slices[w.at]
+    local at = ask and ask.at or w.at
+    local lit = at > 0 and picks[at]
+    if at > 0 then
+        local slice = wheel.slices[at]
         wheel.lit:ClearAllPoints()
         wheel.lit:SetPoint("CENTER", wheel.bg, "CENTER", slice.x, slice.y)
         wheel.lit:SetRotation(slice.angle - math.rad(270))
         wheel.lit:SetDesaturated(not lit or lit.off == true)
     end
-    wheel.lit:SetShown(w.at > 0)
+    wheel.lit:SetShown(at > 0)
+    wheel.title:SetShown(not ask)
+    wheel.page:SetShown(not ask)
+    wheel.ask:SetShown(ask ~= nil)
+    wheel.answer:SetShown(ask ~= nil)
+    if ask then
+        wheel.ask:SetText(L[ask.leave and "LEAVE_ASK" or "JOIN_ASK"]:format(ask.name))
+        wheel.answer:SetText(L[ask.leave and "LEAVE_ANSWER" or "JOIN_ANSWER"]:format(Glyph("PAD1"), Glyph("PAD2")))
+        return wheel.info:SetText(L["ASK_ELSE"])
+    end
     wheel.title:SetText(w.pages[w.page].title)
     wheel.page:SetText(("%s  %d / %d  %s"):format(Glyph("PADLSHOULDER"), w.page, #w.pages, Glyph("PADRSHOULDER")))
     if lit then
-        wheel.info:SetText(L[lit.off and "WHEEL_OFF" or "WHEEL_LETGO"]:format(lit.label))
+        local key = lit.off and "WHEEL_OFF" or lit.join and "WHEEL_JOIN" or lit.channelName and "WHEEL_CHANNEL"
+            or "WHEEL_LETGO"
+        wheel.info:SetText(L[key]:format(lit.join or lit.label, Glyph(lit.channelName and "PAD3" or "PAD1")))
     else
         wheel.info:SetText(L["HINT_WHEEL"]:format(Glyph("PAD4"), Glyph("PAD2")))
     end
@@ -1106,11 +1137,44 @@ end
 local function CloseWheel()
     S.wheel = nil
     if wheel then wheel:Hide() end
+    -- a stick still out as the wheel goes types nothing until it is back at rest
+    for _, st in pairs(sticks) do st.rest = (st.len or 0) > ns.db.rearm end
     if box or S.preview then Paint() end
+end
+
+-- A join asks on the wheel: A runs the game's own /join (ns.ArmJoin), and the pad's buttons are the game's until
+-- then. The line types there once the game has numbered the channel.
+local function AskJoin(w, pick, at)
+    local joiner, name = box, pick.join
+    local function Back(joined)
+        S.joinWait, w.confirm = nil, nil
+        if kb:IsShown() and not kb.viewHold then kb:EnableGamePadButton(true) end
+        if joined then
+            CloseWheel()
+        elseif S.wheel == w then
+            PaintWheel()
+        end
+    end
+    local armed = ns.ArmJoin(name, function()
+        Back(true)
+        ns.AwaitChannel(name, function(id)
+            if not id then return ns.Say(L["JOIN_FAILED"]:format(name)) end
+            if box ~= joiner then return end
+            ns.SwitchChannel(box, { chatType = "CHANNEL", channelTarget = id })
+            Use("channel")
+            Paint()
+        end)
+    end, function() Back(false) end)
+    if armed then
+        S.joinWait, w.confirm = name, { name = name, at = at }
+        kb:EnableGamePadButton(false)
+    end
+    PaintWheel()
 end
 
 WheelStick = function(which, x, y)
     local w = S.wheel
+    if w.confirm then return end
     local sq = x * x + y * y
     if sq > POINT_SQ then
         local degrees = math.deg(math.atan2(y, x))
@@ -1122,9 +1186,11 @@ WheelStick = function(which, x, y)
             PaintWheel()
         end
     elseif sq < LETGO_SQ and w.stick == which and w.at > 0 then
-        local pick = w.pages[w.page].picks[w.at]
+        local at = w.at
+        local pick = w.pages[w.page].picks[at]
         w.at, w.stick = 0, nil
         if pick and not pick.off then
+            if pick.join then return AskJoin(w, pick, at) end
             CloseWheel()
             if pick.settings then
                 -- Chat shuts first; the window comes once the typing line has let go.
@@ -1141,6 +1207,22 @@ end
 
 local function WheelPress(button)
     local w = S.wheel
+    local ask = w.confirm
+    if ask then
+        -- a leave asked on the wheel (a join's buttons are the game's): A leaves, any other button goes back
+        w.confirm = nil
+        if button ~= "PAD1" then return PaintWheel() end
+        local typedThere = ns.IsChannel(box, { chatType = "CHANNEL", channelTarget = ask.number })
+        LeaveChannelByName(ask.name)
+        if typedThere then ns.SwitchChannel(box, { chatType = "SAY" }) end
+        return CloseWheel()
+    end
+    local pointed = w.at > 0 and w.pages[w.page].picks[w.at]
+    if button == "PAD3" and pointed and pointed.channelName then
+        w.confirm = { leave = true, name = pointed.channelName, number = pointed.channelTarget, at = w.at }
+        w.at, w.stick = 0, nil
+        return PaintWheel()
+    end
     if button == "PADLSHOULDER" or button == "PADRSHOULDER" then
         w.page = (w.page + (button == "PADRSHOULDER" and 1 or -1) - 1) % #w.pages + 1
         w.at, w.stick = 0, nil
@@ -2206,6 +2288,10 @@ local function Build()
     end)
     kb:SetScript("OnHide", function(self)
         if probe then Note("keyboard hidden") end
+        if S.joinWait then
+            S.joinWait = nil
+            ns.DisarmJoin()
+        end
         self:EnableGamePadButton(false)
         self:EnableGamePadStick(false)
         StopHold()
@@ -2392,7 +2478,8 @@ end
 function ns.DevTools()
     return { OnStick = OnStick, Press = Press, Unpress = Unpress, Word = Word, PrevLow = PrevLow, Guess = Guess,
         state = S, dict = D, slotKeys = SLOT_KEYS, dirDegrees = DIR_DEGREES, lesson = LESSON,
-        Keyboard = function() return kb end, Box = function() return box end, PlaceBy = PlaceBy }
+        Keyboard = function() return kb end, Box = function() return box end, PlaceBy = PlaceBy,
+        Wheel = function() return wheel end }
 end
 
 -- Outside the game's controller interface its settings can make LT a modifier key (Shift by default): a tap then
