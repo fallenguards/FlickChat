@@ -54,7 +54,7 @@ C_Timer = {
     NewTicker = function(_, fn) lastTick = fn return { Cancel = function() end } end,
 }
 padDown = {}
-C_GamePad = { ButtonBindingToIndex = function(b) return ({ PADBACK = 4, PADLTRIGGER = 6, PADLSHOULDER = 9, PADRSHOULDER = 10 })[b] end,
+C_GamePad = { ButtonBindingToIndex = function(b) return ({ PADBACK = 4, PADLTRIGGER = 6, PADRTRIGGER = 7, PADLSHOULDER = 9, PADRSHOULDER = 10 })[b] end,
     GetDeviceMappedState = function() return { buttons = padDown, axes = { 0, -1 } } end,
     GetActiveDeviceID = function() return 1 end, ButtonIndexToBinding = function(i) return i == 6 and "PADLTRIGGER" or nil end,
     -- like the game's, the mapped list counts from 1
@@ -536,6 +536,75 @@ Press("PAD2")
 watch()
 Is("the watch ends with the keyboard", T.state.ltModifier, nil)
 cvars.GamePadEmulateShift = "NONE"
+
+-- LT and RT down together type "/": in the controller interface each acts on its press, so the first one's
+-- erase or kept word is taken back when the other comes
+Open()
+Has("the guide's RT column ends on LT and RT together", kb.prompts.CHORD.label:GetText(), "[PADLTRIGGER]+[PADRTRIGGER] Type /")
+Type("hello")
+local word = box.text
+now = now + 1
+Down("PADLTRIGGER")
+Is("LT alone erases at once", box.text ~= word, true)
+now = now + 0.1
+Down("PADRTRIGGER")
+Up("PADLTRIGGER")
+Up("PADRTRIGGER")
+Is("LT then RT together type a slash after the word, the erase taken back", box.text, word .. "/")
+Is("its hold stopped", T.state.holdTimer, nil)
+now = now + 1
+Press("PADLTRIGGER")
+Is("a later LT alone erases the slash", box.text, word)
+now = now + 1
+Down("PADRTRIGGER")
+now = now + 0.1
+Down("PADLTRIGGER")
+Up("PADRTRIGGER")
+Up("PADLTRIGGER")
+Is("RT then LT the same, the kept word's space taken back", box.text, word .. "/")
+Press("PADBACK")
+Type("hello")
+now = now + 1
+Down("PADLTRIGGER")
+now = now + 0.5
+Down("PADRTRIGGER")
+Up("PADLTRIGGER")
+Up("PADRTRIGGER")
+Is("half a second apart, each does its own", box.text:find("/", 1, true), nil)
+Press("PADBACK")
+Press("PAD2")
+
+-- outside it, as the game's Shift and Ctrl, both are read off the pad and their taps on letting go are dropped
+cvars.GamePadEmulateShift, cvars.GamePadEmulateCtrl = "PADLTRIGGER", "PADRTRIGGER"
+lastTick = nil
+Open()
+watch = lastTick
+Type("hello")
+word = box.text
+padDown[7] = true
+watch()
+now = now + 0.1
+padDown[8] = true
+watch()
+Is("both down on the pad type a slash", box.text, word .. "/")
+now = now + 1
+watch()
+Is("held on, LT's hold erases nothing", box.text, word .. "/")
+padDown[7], padDown[8] = nil, nil
+watch()
+Down("PADLTRIGGER")
+Up("PADLTRIGGER")
+Down("PADRTRIGGER")
+Up("PADRTRIGGER")
+Is("the game's two taps on letting go do nothing more", box.text, word .. "/")
+now = now + 1
+Down("PADLTRIGGER")
+Up("PADLTRIGGER")
+Is("a later LT tap erases", box.text, word)
+Press("PADBACK")
+Press("PAD2")
+watch()
+cvars.GamePadEmulateShift, cvars.GamePadEmulateCtrl = "NONE", "PADRSHOULDER"
 
 -- a word off the d-pad before it is fully flicked
 Open()

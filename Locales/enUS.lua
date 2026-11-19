@@ -42,6 +42,7 @@ ns.EN = {
         .. " whisper on the right, channels on the d-pad.",
     ERASE = "Erase (hold: words)",
     KEEP = "Keep the word",
+    SLASH = "Type /",
     PICK = "pick a guess",
     EXACT = "Exact letters",
     GUESSING = "Back to guessing",

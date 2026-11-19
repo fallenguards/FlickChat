@@ -45,6 +45,7 @@ L["HINT_CHANNELS"] = "Poussez pour choisir où vous écrivez : Dire, Groupe, Gui
     .. " gauche, vos chuchotements sur le droit, les canaux sur la croix directionnelle."
 L["ERASE"] = "Effacer (maintenir : mots)"
 L["KEEP"] = "Garder le mot"
+L["SLASH"] = "Taper /"
 L["PICK"] = "choisir une suggestion"
 L["EXACT"] = "Lettres exactes"
 L["GUESSING"] = "Retour aux suggestions"

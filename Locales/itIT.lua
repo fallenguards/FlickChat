@@ -45,6 +45,7 @@ L["HINT_CHANNELS"] = "Spingi per scegliere dove scrivi: Di', Gruppo, Gilda e il 
     .. " sussurri sul destro, i canali sulla croce direzionale."
 L["ERASE"] = "Cancella (tieni: parole)"
 L["KEEP"] = "Conferma la parola"
+L["SLASH"] = "Scrivi /"
 L["PICK"] = "scegli un suggerimento"
 L["EXACT"] = "Lettere esatte"
 L["GUESSING"] = "Torna ai suggerimenti"

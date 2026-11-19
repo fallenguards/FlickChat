@@ -1,6 +1,8 @@
 local _, ns = ...
 local L = ns.L
 local D = ns.Dict
+-- Helpers that came after the file reached Lua's 200 locals, in one table.
+local Fit = { UNDER = 90, CLEAR = 12 }
 
 -- The chat box's keyboard on the controller. Each letter is one flick of a stick toward its group (four groups a
 -- stick, straight directions only) and the word list works out the word: the best guess sits highlighted in the
@@ -1278,6 +1280,7 @@ local function Press(button)
         end
         return Show()
     end
+    if (button == "PADLTRIGGER" or button == "PADRTRIGGER") and Fit.Trigger(button) then return end
     if button == "PADRTRIGGER" and S.phrases and S.phraseSend then
         -- The phrases flicked so far start a sentence: letting go of A sends nothing.
         S.phraseSend = false
@@ -1340,6 +1343,9 @@ local function Press(button)
 end
 
 local function Unpress(button)
+    if (button == "PADLTRIGGER" or button == "PADRTRIGGER") and not Fit.trig[button].modifier then
+        Fit.TriggerUp(button)
+    end
     if SLOT_OF[button] then
         StopSlotHold()
     elseif button == "PADLTRIGGER" then
@@ -1591,8 +1597,8 @@ end
 
 -- Every button with the game's own icon. The guide box (R3 hides it) holds the shoulders as the pad holds them, each
 -- hand's trigger over its bumper over its middle button; the face buttons sit in a bar under the chat line, where
--- the game's controller mode keeps its own chat buttons. Menu stays the game's; A sends.
-local COLUMNS = { { "PADLTRIGGER", "PADLSHOULDER", "PADBACK" }, { "PADRTRIGGER", "PADRSHOULDER" } }
+-- the game's controller mode keeps its own chat buttons. Menu stays the game's; A sends. CHORD: LT and RT together.
+local COLUMNS = { { "PADLTRIGGER", "PADLSHOULDER", "PADBACK" }, { "PADRTRIGGER", "PADRSHOULDER", "CHORD" } }
 local FACE = { "PAD1", "PAD3", "PAD4", "PAD2" }
 local ON_BAR = { PAD1 = true, PAD3 = true, PAD4 = true, PAD2 = true }
 -- The bar: its height, the room inside its ends, and between two buttons.
@@ -1609,7 +1615,7 @@ local function Labels()
     -- RB names the reading it would put in the box next.
     local upNext = S.flicks ~= "" and #S.stems >= 2 and S.stems[S.shown % #S.stems + 1]
     labels.PADRSHOULDER = upNext and L["NEXT_IS"]:format(Cap(upNext)) or L["NEXT"]
-    labels.PADRTRIGGER = L["KEEP"]
+    labels.PADRTRIGGER, labels.CHORD = L["KEEP"], L["SLASH"]
     labels.PAD4 = S.lesson and L["LESSON_SKIP"] or L["CHANNEL"]
     labels.PAD3 = S.phrases and L["SAVE_PHRASE"] or S.symbols and L["LETTERS"] or L["SYMBOLS"]
     -- In a fight the game lets no addon close chat: B puts the keyboard away and the game's own B closes it.
@@ -1645,8 +1651,14 @@ end
 local function PlacePrompt(prompt, parent, x, y)
     prompt.icon:ClearAllPoints()
     prompt.icon:SetPoint("CENTER", parent, "BOTTOMLEFT", x, y)
+    local last = prompt.icon
+    if prompt.second then
+        prompt.second.icon:ClearAllPoints()
+        prompt.second.icon:SetPoint("LEFT", prompt.icon, "RIGHT", 2, 0)
+        last = prompt.second.icon
+    end
     prompt.label:ClearAllPoints()
-    prompt.label:SetPoint("LEFT", prompt.icon, "RIGHT", LABEL_GAP, 0)
+    prompt.label:SetPoint("LEFT", last, "RIGHT", LABEL_GAP, 0)
 end
 
 -- The guide's columns as wide as their longest label; the bar's buttons one after another.
@@ -1662,7 +1674,10 @@ local function PlacePrompts()
     rt.label:SetJustifyH("LEFT")
     local function Widest(keys)
         local most = 0
-        for _, key in ipairs(keys) do most = math.max(most, P[key].width or P[key].label:GetStringWidth()) end
+        for _, key in ipairs(keys) do
+            local width = P[key].width or P[key].label:GetStringWidth()
+            most = math.max(most, width + (P[key].second and GUIDE_ICON + 2 or 0))
+        end
         return most
     end
     local x2 = GUIDE_EDGE + GUIDE_ICON + LABEL_GAP + Widest(COLUMNS[1]) + GUIDE_COL
@@ -1742,8 +1757,12 @@ local function PaintPrompts()
     local moved = kb.promptsMoved
     for key, name in pairs(Labels()) do
         local prompt = kb.prompts[key]
-        SetIcon(prompt, key)
-        if prompt.plain then name = prompt.plain .. " " .. name end
+        SetIcon(prompt, prompt.second and "PADLTRIGGER" or key)
+        if prompt.second then
+            SetIcon(prompt.second, "PADRTRIGGER")
+            if prompt.second.plain then name = prompt.second.plain .. " " .. name end
+        end
+        if prompt.plain then name = prompt.plain .. (prompt.second and "+" or " ") .. name end
         if prompt.text ~= name then
             moved = moved or not prompt.width or (prompt.text == "") ~= (name == "")
             prompt.label:SetText(name)
@@ -2044,6 +2063,7 @@ function ns.Restyle()
     for key, prompt in pairs(kb.prompts) do
         local icon = ON_BAR[key] and BAR_ICON or GUIDE_ICON
         prompt.icon:SetSize(icon, icon)
+        if prompt.second then prompt.second.icon:SetSize(icon, icon) end
         prompt.label:SetFontObject(GameFontNormal)
         prompt.text = nil
     end
@@ -2262,6 +2282,7 @@ local function Build()
         prompt.label:SetWordWrap(false)
         kb.prompts[key] = prompt
     end
+    kb.prompts.CHORD.second = { icon = kb.guide:CreateTexture(nil, "ARTWORK") }
     kb.hints = CreateFrame("Frame", nil, kb)
     kb.hints:SetAllPoints(kb)
     kb.toggle = { icon = kb.hints:CreateTexture(nil, "ARTWORK"), label = kb.hints:CreateFontString(nil, "ARTWORK") }
@@ -2330,8 +2351,7 @@ local function Names()
 end
 
 -- Beside the chat box on the side with more room, bottoms level.
--- Placing by a text box that is not chat, and finding such boxes (one table: the file is at Lua's 200 locals).
-local Fit = { UNDER = 90, CLEAR = 12 }
+-- Placing by a text box that is not chat, and finding such boxes (Fit, at the top).
 
 -- The window a text box belongs to: its last parent before the screen.
 function Fit.WindowOf(edit)
@@ -2482,17 +2502,72 @@ function ns.DevTools()
         Wheel = function() return wheel end }
 end
 
--- Outside the game's controller interface its settings can make LT a modifier key (Shift by default): a tap then
--- comes as a press and release together on letting go, and a hold never comes at all (/flick sticks, 2026-11-16).
--- While the keyboard is up, LT held is read off the pad itself.
+-- LT and RT down together type "/". A trigger that acted on its press has that taken back when the other comes
+-- within CHORD seconds; a modifier trigger's tap, which comes on letting go, is dropped after a chord.
+Fit.CHORD = 0.3
+Fit.SNAP = { "committed", "flicks", "literal", "undo", "autoSpace", "symbols", "box", "shown", "exact" }
+Fit.trig = { PADLTRIGGER = { at = 0 }, PADRTRIGGER = { at = 0 } }
+
+function Fit.Chordable()
+    return box and not (S.move or S.wheel or S.forget or S.phrases or S.naming or S.lesson or S.joinWait
+        or S.preview or kb.viewHold)
+end
+
+function Fit.TriggerDown(button)
+    local t = Fit.trig[button]
+    local other = Fit.trig[button == "PADLTRIGGER" and "PADRTRIGGER" or "PADLTRIGGER"]
+    t.down, t.at, t.snap, t.swallow = true, GetTime(), nil, nil
+    if S.chord or not other.down or t.at - other.at > Fit.CHORD or not Fit.Chordable() then return false end
+    local snap = other.snap
+    if snap then
+        for _, key in ipairs(Fit.SNAP) do S[key] = snap[key] end
+        Guess()
+        if snap.flicks ~= "" then S.shown = math.max(1, math.min(snap.shown or 1, #S.stems)) end
+    end
+    StopHold()
+    S.chord = true
+    for _, each in pairs(Fit.trig) do each.swallow = each.modifier or nil end
+    TypeSymbol("/")
+    return true
+end
+
+function Fit.TriggerUp(button)
+    Fit.trig[button].down = false
+    if not Fit.trig.PADLTRIGGER.down and not Fit.trig.PADRTRIGGER.down then S.chord = nil end
+end
+
+-- A trigger's press as the keyboard hears it: true when it is spent (a chord, or a modifier's tap after one).
+function Fit.Trigger(button)
+    local t = Fit.trig[button]
+    if t.modifier then
+        local spent = t.swallow
+        t.swallow = nil
+        return spent or false
+    end
+    if Fit.TriggerDown(button) then return true end
+    local snap = {}
+    for _, key in ipairs(Fit.SNAP) do snap[key] = S[key] end
+    t.snap = snap
+    return false
+end
+
+-- Outside the game's controller interface its settings can make LT and RT modifier keys (Shift and Ctrl by
+-- default): a tap then comes as a press and release together on letting go, and a hold never comes at all
+-- (/flick sticks, 2026-11-16). While the keyboard is up such a trigger is read off the pad itself.
 function Fit.WatchLT()
     if Fit.ltTicker then Fit.ltTicker:Cancel() end
-    Fit.ltTicker, S.ltModifier, S.ltQuiet = nil, nil, nil
-    local index, lt = C_GamePad.ButtonBindingToIndex("PADLTRIGGER"), "PADLTRIGGER"
-    if not index or InputUtil ~= nil and InputUtil.IsGamepadUIEnabled() then return end
-    if C_CVar.GetCVar("GamePadEmulateShift") ~= lt and C_CVar.GetCVar("GamePadEmulateCtrl") ~= lt
-        and C_CVar.GetCVar("GamePadEmulateAlt") ~= lt then return end
-    S.ltModifier = true
+    Fit.ltTicker, S.ltModifier, S.ltQuiet, S.chord = nil, nil, nil, nil
+    local padUI = InputUtil ~= nil and InputUtil.IsGamepadUIEnabled()
+    local watched = {}
+    for key, t in pairs(Fit.trig) do
+        t.index, t.down, t.at, t.snap, t.swallow = C_GamePad.ButtonBindingToIndex(key), false, 0, nil, nil
+        t.modifier = t.index ~= nil and not padUI and (C_CVar.GetCVar("GamePadEmulateShift") == key
+            or C_CVar.GetCVar("GamePadEmulateCtrl") == key or C_CVar.GetCVar("GamePadEmulateAlt") == key)
+        if t.modifier then watched[#watched + 1] = t end
+    end
+    if #watched == 0 then return end
+    S.ltModifier = Fit.trig.PADLTRIGGER.modifier or nil
+    local index = Fit.trig.PADLTRIGGER.index
     local since, nextAt
     Fit.ltTicker = C_Timer.NewTicker(0.05, function()
         if not box or not kb:IsShown() then
@@ -2503,7 +2578,16 @@ function Fit.WatchLT()
         local state = C_GamePad.GetDeviceMappedState()
         local now = GetTime()
         -- the list counts from 1, the game's button index from 0
-        if not (state and state.buttons[index + 1]) or kb.viewHold or S.move or S.wheel or S.forget or S.phraseSave then
+        for key, t in pairs(Fit.trig) do
+            local down = t.modifier and state and state.buttons[t.index + 1] or false
+            if t.modifier and down and not t.down then
+                Fit.TriggerDown(key)
+            elseif t.modifier and t.down and not down then
+                Fit.TriggerUp(key)
+            end
+        end
+        if not S.ltModifier or not (state and state.buttons[index + 1]) or S.chord or kb.viewHold or S.move
+            or S.wheel or S.forget or S.phraseSave then
             since, nextAt = nil, nil
             return
         end

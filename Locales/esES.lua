@@ -44,6 +44,7 @@ L["HINT_CHANNELS"] = "Mueve para elegir dónde escribes: Decir, Grupo, Hermandad
     .. " quién susurras en el derecho, canales en la cruceta."
 L["ERASE"] = "Borrar (mantener: palabras)"
 L["KEEP"] = "Elegir la palabra"
+L["SLASH"] = "Escribir /"
 L["PICK"] = "elegir opción"
 L["EXACT"] = "Letras exactas"
 L["GUESSING"] = "Volver a adivinar"

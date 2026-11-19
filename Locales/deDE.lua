@@ -46,6 +46,7 @@ L["HINT_CHANNELS"] = "Schnippe, um zu wählen, wohin du schreibst: Sagen, Gruppe
     .. " linken Stick, Flüsterpartner auf dem rechten, Kanäle auf dem Steuerkreuz."
 L["ERASE"] = "Löschen (halten: Wörter)"
 L["KEEP"] = "Wort übernehmen"
+L["SLASH"] = "/ eingeben"
 L["PICK"] = "Vorschlag wählen"
 L["EXACT"] = "Genaue Buchstaben"
 L["GUESSING"] = "Zurück zum Raten"
