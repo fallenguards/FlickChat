@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0] - 2026-11-20
+
+### Added
+- Scroll the chat while you type: hold View and push the right stick, up for older lines, faster the further you push. Letting go of View after scrolling keeps what you typed. The View and right stick icons beside the chat window show how, with or without the game's controller interface.
+- Join channels from the wheel: its Channels page now also offers the zone's channels you are not in, such as General, Trade or LookingForGroup. Let go on one and the wheel asks first: A joins and your line types there, B goes back.
+- Leave a channel: point at it on the Channels page and press X; the wheel asks first.
+- LT and RT pressed together type a slash, for slash commands without the symbols page. The button guide shows it under RB.
+
 ## [1.7.0] - 2026-11-16
 
 ### Changed

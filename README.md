@@ -4,6 +4,8 @@ A controller keyboard for chat in World of Warcraft: Forever. Each stick has fou
 
 Open chat from the game's controller menu and the keyboard comes with it. A short lesson runs the first time, and a one-minute typing practice shows your words a minute. Settings open with the controller alone: from the keyboard, press Y for the wheel, turn to its last page and pick Settings; or pick FlickChat in the game's Options, on the AddOns tab. /flick options opens them too.
 
+While you type, hold View and push the right stick to scroll the chat, and press LT and RT together for a slash. The wheel's Channels page joins and leaves channels too, such as General and Trade.
+
 Keyboard shape in the settings stacks the guessed words with the letters, on top or below, for a narrower keyboard.
 
 It guesses words in English, Spanish, Portuguese, French, German, Italian and Russian. It follows your game's language, and Typing language in the settings picks another.
