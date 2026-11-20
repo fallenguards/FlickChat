@@ -707,6 +707,10 @@ local function OnStick(_, which, x, y, len)
     if not st or not box then return end
     st.len = len
     if S.joinWait then return end
+    if kb.viewHold then
+        if which == "Right" then kb.viewHold.y = y end
+        return
+    end
     if S.move then return Move.Stick(which, x, y, len) end
     if S.wheel then return WheelStick(which, x, y) end
     if st.rest then
@@ -1235,10 +1239,11 @@ local function WheelPress(button)
 end
 
 -- View held: the pad's buttons go to the game until it is let go, so LB and RB flip the chat tabs by the game's own
--- keys (a tab shown by our code is refused). No bumper while it was down: it was a tap, which clears the line.
+-- keys (a tab shown by our code is refused), and the right stick scrolls the chat (Fit.ScrollChat). No bumper or
+-- scroll while it was down: it was a tap, which clears the line.
 local function HoldView()
     if kb.viewHold then return end
-    local hold = { bumper = false }
+    local hold = { bumper = false, y = 0, carry = 0 }
     kb.viewHold = hold
     kb:EnableGamePadButton(false)
     local function Index(binding) return C_GamePad.ButtonBindingToIndex(binding) or -1 end
@@ -1251,10 +1256,12 @@ local function HoldView()
         if buttons and base == nil then base = buttons[view] and 0 or buttons[view + 1] and 1 or nil end
         if buttons and base and buttons[view + base] then
             hold.bumper = hold.bumper or buttons[left + base] or buttons[right + base] or false
-            return
+            return Fit.ScrollChat(hold)
         end
         hold.ticker:Cancel()
         kb.viewHold = nil
+        -- a stick still out as View goes types nothing until it is back at rest
+        for _, st in pairs(sticks) do st.rest = (st.len or 0) > ns.db.rearm end
         if kb:IsShown() then
             kb:EnableGamePadButton(true)
             if not hold.bumper and box then ClearAll() end
@@ -1723,6 +1730,7 @@ local function PaintPrompts()
     -- Under a settings box the bar always shows: it is the only word on how to save or leave.
     kb.bar:SetShown(not S.preview
         and ((box ~= nil and not box.chatFrame) or not (ns.db.guideOff and (reach == "both" or reach == "bar"))))
+    Fit.ScrollMarks(ns.db.guideOff and (reach == "both" or reach == "bar"))
     local toggle = kb.toggle
     SetIcon(toggle, "PADRSTICK")
     local text = L[ns.db.guideOff and "HINTS_SHOW" or "HINTS_HIDE"]
@@ -2500,6 +2508,70 @@ function ns.DevTools()
         state = S, dict = D, slotKeys = SLOT_KEYS, dirDegrees = DIR_DEGREES, lesson = LESSON,
         Keyboard = function() return kb end, Box = function() return box end, PlaceBy = PlaceBy,
         Wheel = function() return wheel end }
+end
+
+-- View held, the right stick scrolls the chat window: up for older lines, faster the further it leans. The window's
+-- scroll calls are the game's secure ones (ScrollingMessageFrameSecureMixin), run as its own from here.
+Fit.SCROLL_LINES, Fit.SCROLL_DEAD = 20, 0.25
+
+function Fit.ScrollChat(hold)
+    local chat = box and box.chatFrame and SELECTED_CHAT_FRAME
+    local now, y = GetTime(), hold.y
+    local seconds = now - (hold.at or now)
+    hold.at = now
+    if not chat or math.abs(y) < Fit.SCROLL_DEAD then
+        hold.carry = 0
+        return
+    end
+    hold.bumper = true
+    local lean = (math.abs(y) - Fit.SCROLL_DEAD) / (1 - Fit.SCROLL_DEAD)
+    hold.carry = hold.carry + (y > 0 and 1 or -1) * lean * lean * Fit.SCROLL_LINES * seconds
+    local whole = hold.carry > 0 and math.floor(hold.carry) or math.ceil(hold.carry)
+    if whole == 0 then return end
+    local before = chat:GetScrollOffset()
+    chat:ScrollByAmount(whole)
+    -- at either end the lean is not saved up
+    hold.carry = chat:GetScrollOffset() == before and 0 or hold.carry - whole
+end
+
+-- View and the right stick scroll: the View icon in the middle of the chat window's left button column, empty in
+-- the game's own window (its arrows are on the scroll bar), the stick pushed up over it and pushed down under it.
+-- The game hides that column in its controller interface: placed by screen position, the same in both. Gone under a
+-- settings box, in the preview, and with the button bar when the player hid that.
+function Fit.ScrollMarks(hidden)
+    local marks = kb.scrollMarks
+    if not marks then
+        marks = CreateFrame("Frame", nil, kb)
+        marks:Hide()
+        marks:SetIgnoreParentScale(true)
+        marks:SetAllPoints(UIParent)
+        for _, key in ipairs({ "view", "up", "down" }) do marks[key] = { icon = marks:CreateTexture(nil, "ARTWORK") } end
+        -- the stick's art fills under half its square (room for the arrow): drawn larger, its empty edge tucked in
+        marks.up.icon:SetPoint("BOTTOM", marks.view.icon, "TOP", 0, -5)
+        marks.down.icon:SetPoint("TOP", marks.view.icon, "BOTTOM", 0, 5)
+        kb.scrollMarks = marks
+    end
+    local chat = box and box.chatFrame
+    if hidden or S.preview or not chat or not chat:GetTop() then return marks:Hide() end
+    local scale = UIParent:GetEffectiveScale()
+    marks:SetScale(scale)
+    marks:SetFrameStrata(kb:GetFrameStrata())
+    -- the column's middle when it has a place, else as far left of the window as it stands
+    local column, x = chat.buttonFrame
+    if type(column) == "table" and column.GetCenter and column:GetCenter() then
+        x = column:GetCenter() * column:GetEffectiveScale() / scale
+    else
+        x = chat:GetLeft() * chat:GetEffectiveScale() / scale - 16
+    end
+    local middle = (chat:GetTop() + chat:GetBottom()) / 2 * chat:GetEffectiveScale() / scale
+    SetIcon(marks.view, "PADBACK")
+    SetIcon(marks.up, "PADRSTICKUP")
+    SetIcon(marks.down, "PADRSTICKDOWN")
+    marks.view.icon:SetSize(GUIDE_ICON, GUIDE_ICON)
+    for _, stick in ipairs({ marks.up, marks.down }) do stick.icon:SetSize(GUIDE_ICON * 2.2, GUIDE_ICON * 2.2) end
+    marks.view.icon:ClearAllPoints()
+    marks.view.icon:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, middle)
+    marks:Show()
 end
 
 -- LT and RT down together type "/". A trigger that acted on its press has that taken back when the other comes

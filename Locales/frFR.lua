@@ -40,7 +40,7 @@ L["LESSON_GUESSING"] = "Pour l'instant la zone de discussion affiche « %s » : 
     .. " donc elle devine, et devine mieux à chaque geste."
 L["LESSON_NEXT"] = "La zone de discussion affiche « %s » : ces gestes forment plusieurs mots. %s montre la suggestion"
     .. " suivante jusqu'à ce que « %s » apparaisse."
-L["CLEAR"] = "Tout effacer (maintenir : LB/RB changent d'onglet)"
+L["CLEAR"] = "Tout effacer (maintenir : LB/RB onglets, stick droit défile)"
 L["HINT_CHANNELS"] = "Poussez pour choisir où vous écrivez : Dire, Groupe, Guilde et votre groupe sur le stick"
     .. " gauche, vos chuchotements sur le droit, les canaux sur la croix directionnelle."
 L["ERASE"] = "Effacer (maintenir : mots)"

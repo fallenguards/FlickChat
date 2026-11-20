@@ -37,7 +37,7 @@ ns.EN = {
         .. " the guess firms up with each flick.",
     LESSON_NEXT = "The chat box shows \"%s\": these flicks spell more than one word. %s shows the next guess until"
         .. " \"%s\" is there.",
-    CLEAR = "Clear all (hold: LB/RB flip chat tabs)",
+    CLEAR = "Clear all (hold: LB/RB tabs, right stick scrolls)",
     HINT_CHANNELS = "Flick to choose where you type: Say, Party, Guild and your group on the left stick, people you"
         .. " whisper on the right, channels on the d-pad.",
     ERASE = "Erase (hold: words)",

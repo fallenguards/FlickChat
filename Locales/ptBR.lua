@@ -38,7 +38,7 @@ L["LESSON_GUESSING"] = "A caixa de chat mostra \"%s\" por enquanto: a caixa %s t
     .. " tenta adivinhar, e acerta melhor a cada toque."
 L["LESSON_NEXT"] = "A caixa de chat mostra \"%s\": esses toques formam mais de uma palavra. %s mostra a próxima"
     .. " sugestão até aparecer \"%s\"."
-L["CLEAR"] = "Limpar tudo (segure: LB/RB trocam de aba)"
+L["CLEAR"] = "Limpar tudo (segure: LB/RB abas, analógico direito rola)"
 L["HINT_CHANNELS"] = "Dê um toque para escolher onde escrever: Dizer, Grupo, Guilda e o seu grupo no analógico"
     .. " esquerdo, pessoas para sussurrar no direito, canais no direcional."
 L["ERASE"] = "Apagar (segure: palavras)"

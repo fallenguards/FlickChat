@@ -40,7 +40,7 @@ L["LESSON_GUESSING"] = "Per ora la casella della chat mostra \"%s\": la casella 
     .. " quindi indovina, e indovina meglio a ogni movimento."
 L["LESSON_NEXT"] = "La casella della chat mostra \"%s\": questi movimenti formano più di una parola. %s mostra il"
     .. " suggerimento successivo finché compare \"%s\"."
-L["CLEAR"] = "Cancella tutto (tieni: LB/RB cambiano scheda)"
+L["CLEAR"] = "Cancella tutto (tieni: LB/RB schede, stick destro scorre)"
 L["HINT_CHANNELS"] = "Spingi per scegliere dove scrivi: Di', Gruppo, Gilda e il tuo gruppo sullo stick sinistro, chi"
     .. " sussurri sul destro, i canali sulla croce direzionale."
 L["ERASE"] = "Cancella (tieni: parole)"

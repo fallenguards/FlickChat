@@ -220,6 +220,8 @@ box.shown = false
 box.scripts.OnEnterPressed = function(self) sent[#sent + 1] = self.text; self.text = ""; generic.Hide(self) end
 box.scripts.OnEscapePressed = function(self) if (self.text or "") ~= "" then self.text = "" else generic.Hide(self) end end
 function box.HighlightText(self, a, b) self.hl = { a, b } end
+function box.GetTextInsets() return 40, 13, 0, 0 end
+function box.GetFont() return "Fonts\\FRIZQT__.TTF", 14, "" end
 box.attr = { chatType = "SAY" }
 function box.SetChatType(self, v) self.attr.chatType = v end
 function box.GetChatType(self) return self.attr.chatType end
@@ -624,6 +626,62 @@ Open()
 Is("the unsent message is back", box.text, "Anyone ")
 Press("PADBACK")
 Is("View clears the line", box.text, "")
+
+-- View held, the right stick scrolls the chat window by its own scroll calls, faster the further it leans; the line
+-- stays, and a stick still out as View goes types nothing
+local window = { offset = 0, max = 100 }
+function window.GetScrollOffset(self) return self.offset end
+function window.ScrollByAmount(self, n) self.offset = math.max(0, math.min(self.max, self.offset + n)) end
+SELECTED_CHAT_FRAME = window
+Type("hello")
+local line = box.text
+lastTick = nil
+Down("PADBACK")
+local view = lastTick
+padDown[5] = true
+view()
+local kbf = _G.FlickChatKeyboard
+kbf.scripts.OnGamePadStick(kbf, "Right", 0, 1, 1)
+now = now + 0.5
+view()
+Is("full up for half a second scrolls ten lines up", window.offset, 10)
+kbf.scripts.OnGamePadStick(kbf, "Right", 0, -0.625, 0.625)
+now = now + 1
+view()
+Is("leaning half the way down for a second, a quarter of the speed back", window.offset, 5)
+kbf.scripts.OnGamePadStick(kbf, "Right", 0, 0, 0)
+view()
+kbf.scripts.OnGamePadStick(kbf, "Left", 0, 1, 1)
+now = now + 0.5
+view()
+Is("the left stick scrolls nothing and types nothing", window.offset == 5 and box.text == line, true)
+kbf.scripts.OnGamePadStick(kbf, "Left", 0, 0, 0)
+kbf.scripts.OnGamePadStick(kbf, "Right", 0, -0.7, 0.7)
+padDown[5] = nil
+now = now + 0.05
+view()
+Up("PADBACK")
+Is("letting go of View after a scroll keeps the line", box.text, line)
+kbf.scripts.OnGamePadStick(kbf, "Right", 0, 0, 0)
+Is("the right stick still out as View went types nothing", box.text, line)
+kbf.scripts.OnGamePadStick(kbf, "Right", 0, -0.7, 0.7)
+kbf.scripts.OnGamePadStick(kbf, "Right", 0, 0, 0)
+Is("once back at rest it types again", box.text ~= line, true)
+SELECTED_CHAT_FRAME = nil
+Press("PADBACK")
+
+-- beside the chat window, in its left column: View, the stick pushed up over it and pushed down under it
+Press("PADBACK")
+local marks = kb.scrollMarks
+Is("typing in chat shows the scroll marks", marks.shown, true)
+Is("the stick up, View, the stick down", marks.up.plain .. marks.view.plain .. marks.down.plain, "[PADRSTICKUP][PADBACK][PADRSTICKDOWN]")
+for _ = 1, 6 do Type("hello") Press("PADRTRIGGER") end
+Is("a long line leaves them be", marks.shown, true)
+Press("PADBACK")
+Press("PADRSTICK")
+Is("hidden hints hide them", marks.shown, false)
+Press("PADRSTICK")
+Is("and bring them back", marks.shown, true)
 
 -- quick phrases chained while A is held go as one message
 local count = #sent

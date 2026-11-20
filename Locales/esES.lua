@@ -39,7 +39,7 @@ L["LESSON_GUESSING"] = "Por ahora la caja de chat muestra \"%s\": la casilla %s 
     .. " adivina, y acierta más con cada movimiento."
 L["LESSON_NEXT"] = "La caja de chat muestra \"%s\": estos movimientos forman más de una palabra. %s muestra la"
     .. " siguiente opción hasta que aparezca \"%s\"."
-L["CLEAR"] = "Borrar todo (mantener: LB/RB cambian de pestaña)"
+L["CLEAR"] = "Borrar todo (mantener: LB/RB pestañas, stick derecho desplaza)"
 L["HINT_CHANNELS"] = "Mueve para elegir dónde escribes: Decir, Grupo, Hermandad y tu grupo en el stick izquierdo, a"
     .. " quién susurras en el derecho, canales en la cruceta."
 L["ERASE"] = "Borrar (mantener: palabras)"

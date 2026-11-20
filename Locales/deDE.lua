@@ -41,7 +41,7 @@ L["LESSON_GUESSING"] = "Im Chatfeld steht vorerst \"%s\": das Feld %s enthält m
     .. " geraten, und mit jeder Bewegung wird es genauer."
 L["LESSON_NEXT"] = "Im Chatfeld steht \"%s\": diese Bewegungen ergeben mehr als ein Wort. %s zeigt den nächsten"
     .. " Vorschlag, bis \"%s\" dort steht."
-L["CLEAR"] = "Alles löschen (halten: LB/RB wechseln Chat-Tabs)"
+L["CLEAR"] = "Alles löschen (halten: LB/RB Chat-Tabs, rechter Stick scrollt)"
 L["HINT_CHANNELS"] = "Schnippe, um zu wählen, wohin du schreibst: Sagen, Gruppe, Gilde und deine Gruppe auf dem"
     .. " linken Stick, Flüsterpartner auf dem rechten, Kanäle auf dem Steuerkreuz."
 L["ERASE"] = "Löschen (halten: Wörter)"
