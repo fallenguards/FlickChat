@@ -672,6 +672,41 @@ Is("once back at rest it types again", box.text ~= line, true)
 SELECTED_CHAT_FRAME = nil
 Press("PADBACK")
 
+-- outside the game's controller interface (its own bumpers on the tabs are there only inside it), View held binds LB
+-- and RB to secure clicks on the chat tabs either side of the shown one; let go, the bumpers are the game's again
+local tabFrames = {}
+for i = 1, 3 do
+    local chatFrame = Obj(UIParent)
+    rawset(chatFrame, "GetName", function() return "ChatFrame" .. i end)
+    _G["ChatFrame" .. i .. "Tab"] = Obj(UIParent)
+    tabFrames[i] = chatFrame
+end
+GENERAL_CHAT_DOCK = Obj(UIParent)
+GENERAL_CHAT_DOCK.DOCKED_CHAT_FRAMES = tabFrames
+function FCFDock_GetSelectedWindow() return tabFrames[2] end
+Type("hello")
+line = box.text
+lastTick = nil
+Down("PADBACK")
+local held = lastTick
+padDown[5] = true
+held()
+Is("View held: LB clicks the tab before the shown one", overrides.PADLSHOULDER == "FlickChatTabPrev"
+    and _G.FlickChatTabPrev.attrs.clickbutton == _G.ChatFrame1Tab, true)
+Is("and RB the one after it", overrides.PADRSHOULDER == "FlickChatTabNext"
+    and _G.FlickChatTabNext.attrs.clickbutton == _G.ChatFrame3Tab, true)
+Is("each click on the press, once", _G.FlickChatTabNext.attrs.type == "click"
+    and _G.FlickChatTabNext.attrs.useOnKeyDown == true, true)
+padDown[10] = true
+held()
+padDown[10], padDown[5] = nil, nil
+held()
+Up("PADBACK")
+Is("let go, the bumpers are the game's again", overrides.PADLSHOULDER == nil and overrides.PADRSHOULDER == nil, true)
+Is("a bumper used, the line stays", box.text, line)
+GENERAL_CHAT_DOCK, FCFDock_GetSelectedWindow = nil, nil
+Press("PADBACK")
+
 -- beside the chat window, in its left column: View, the stick pushed up over it and pushed down under it
 Press("PADBACK")
 local marks = kb.scrollMarks

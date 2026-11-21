@@ -1259,6 +1259,52 @@ local function WheelPress(button)
     end
 end
 
+-- The chat tabs either side of the shown one, as the bumpers' clicks while View is held (none past either end).
+function Fit.TabTargets()
+    local tabs, dock = Fit.tabKeys, GENERAL_CHAT_DOCK
+    if not tabs or InCombatLockdown() or not dock or dock:IsForbidden() or not FCFDock_GetSelectedWindow then return end
+    local docked, shown, before, after = dock.DOCKED_CHAT_FRAMES or {}, FCFDock_GetSelectedWindow(dock), nil, nil
+    for i, frame in ipairs(docked) do
+        if frame == shown then before, after = docked[i - 1], docked[i + 1] end
+    end
+    tabs.Prev:SetAttribute("clickbutton", before and _G[before:GetName() .. "Tab"] or nil)
+    tabs.Next:SetAttribute("clickbutton", after and _G[after:GetName() .. "Tab"] or nil)
+end
+
+-- View held outside the game's controller interface: LB and RB flip the chat tabs. The game's own bumpers on its
+-- tabs are there only inside that interface, and a tab selected by our code is refused, so two secure buttons click
+-- the tab before and after the shown one, bound to the bumpers while View is held (priority bindings, over another
+-- addon's plain ones) and out of a fight. A fight clears them from secure code, by the owner's state driver.
+function Fit.TabKeys(on)
+    if InCombatLockdown() or not GENERAL_CHAT_DOCK then return end
+    local tabs = Fit.tabKeys
+    if not tabs then
+        local owner = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
+        owner:SetAttribute("_onstate-fight", [[ if newstate == "on" then self:ClearBindings() end ]])
+        if RegisterStateDriver then RegisterStateDriver(owner, "fight", "[combat] on; off") end
+        tabs = { owner = owner }
+        for _, way in ipairs({ "Prev", "Next" }) do
+            local button = CreateFrame("Button", "FlickChatTab" .. way, UIParent, "SecureActionButtonTemplate")
+            button:SetSize(1, 1)
+            button:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -10, 10)
+            button:EnableMouse(false)
+            button:SetAttribute("type", "click")
+            -- one click a press, on the press: View let go before the bumper is would leave a release unheard
+            button:SetAttribute("useOnKeyDown", true)
+            button:RegisterForClicks("AnyDown", "AnyUp")
+            -- the tab shown has changed: the next press's targets follow it
+            button:SetScript("PostClick", function() Fit.TabTargets() end)
+            tabs[way] = button
+        end
+        Fit.tabKeys = tabs
+    end
+    ClearOverrideBindings(tabs.owner)
+    if not on then return end
+    Fit.TabTargets()
+    SetOverrideBindingClick(tabs.owner, true, "PADLSHOULDER", "FlickChatTabPrev", "LeftButton")
+    SetOverrideBindingClick(tabs.owner, true, "PADRSHOULDER", "FlickChatTabNext", "LeftButton")
+end
+
 -- View held: the pad's buttons go to the game until it is let go, so LB and RB flip the chat tabs by the game's own
 -- keys (a tab shown by our code is refused), and the right stick scrolls the chat (Fit.ScrollChat). No bumper or
 -- scroll while it was down: it was a tap, which clears the line.
@@ -1267,6 +1313,8 @@ local function HoldView()
     local hold = { bumper = false, y = 0, carry = 0 }
     kb.viewHold = hold
     kb:EnableGamePadButton(false)
+    hold.tabs = box and box.chatFrame and not (InputUtil and InputUtil.IsGamepadUIEnabled()) or nil
+    if hold.tabs then Fit.TabKeys(true) end
     local function Index(binding) return C_GamePad.ButtonBindingToIndex(binding) or -1 end
     local view, left, right = Index("PADBACK"), Index("PADLSHOULDER"), Index("PADRSHOULDER")
     local base
@@ -1281,6 +1329,7 @@ local function HoldView()
         end
         hold.ticker:Cancel()
         kb.viewHold = nil
+        if hold.tabs then Fit.TabKeys(false) end
         -- a stick still out as View goes types nothing until it is back at rest
         for _, st in pairs(sticks) do st.rest = (st.len or 0) > ns.db.rearm end
         if kb:IsShown() then
@@ -2185,14 +2234,33 @@ local function GameChatButtons(edit)
         hints.holder:SetFrameLevel(dock:GetFrameLevel() + 10)
     end
     local game = dock and InputUtil ~= nil and InputUtil.IsGamepadUIEnabled()
+    -- Outside the game's controller interface its hint frames are not laid out: the pairs go beside the first docked
+    -- tab and the last one shown (or the dock's right end, its last tabs scrolled out of sight).
+    local first, last
+    local docked = dock and not game and not dock:IsForbidden() and dock.DOCKED_CHAT_FRAMES
+    if docked and docked[1] then
+        first, last = _G[docked[1]:GetName() .. "Tab"], _G[docked[#docked]:GetName() .. "Tab"]
+        if last and not last:IsVisible() then last = dock end
+    end
     for i, key in ipairs({ "PADBACK", "PADLSHOULDER", "PADBACK", "PADRSHOULDER" }) do
         local hint = game and (i <= 2 and dock.LeftTabHint or dock.RightTabHint)
+        local beside = not game and (i <= 2 and first or last)
         local icon = hints[i].icon
         if hint and not hint:IsForbidden() then
             SetIcon(hints[i], key)
             icon:ClearAllPoints()
             icon:SetPoint("CENTER", hint, "CENTER",
                 (i % 2 == 1 and -1 or 1) * TAB_HINT_ICON / 2 + (i <= 2 and -TAB_HINT_OUT or TAB_HINT_OUT), 0)
+        elseif beside and not beside:IsForbidden() then
+            -- View then the bumper, reading outward from the tabs
+            SetIcon(hints[i], key)
+            icon:ClearAllPoints()
+            local out = TAB_HINT_OUT + (i % 2 == 1 and 0.5 or 1.5) * TAB_HINT_ICON
+            if i <= 2 then
+                icon:SetPoint("CENTER", beside, "LEFT", -(TAB_HINT_OUT + (i == 1 and 1.5 or 0.5) * TAB_HINT_ICON), 0)
+            else
+                icon:SetPoint("CENTER", beside, "RIGHT", out, 0)
+            end
         else
             icon:Hide()
         end
@@ -2927,6 +2995,11 @@ function ns.Ready()
     if ns.profile.hideLine then ns.FadeLines() end
     -- A tab picked shows its own typing line faded again: after the game's pick, ours go out of sight once more.
     if FCFDock_SelectWindow then
-        hooksecurefunc("FCFDock_SelectWindow", function() C_Timer.After(0, ns.FadeLines) end)
+        hooksecurefunc("FCFDock_SelectWindow", function()
+            C_Timer.After(0, function()
+                ns.FadeLines()
+                if kb and kb.viewHold then Fit.TabTargets() end
+            end)
+        end)
     end
 end
