@@ -141,10 +141,16 @@ end
 -- The focused row kept in sight.
 local function Follow()
     local scroll = window.scroll
-    local top, bottom = (focus - 1) * ROW_H, focus * ROW_H
+    -- The focused row and the next stop each way in sight, the titles between with them (a section's first row
+    -- brings its title in): a cursor that steps only to rows in view and scrolls nothing (an addon's window walk)
+    -- can always reach the next one.
+    local before, after = focus - 1, focus + 1
+    while specs[before] and specs[before].head do before = before - 1 end
+    while specs[after] and specs[after].head do after = after + 1 end
+    if not specs[before] then before = focus > 1 and 1 or focus end
+    if not specs[after] then after = focus end
+    local top, bottom = (before - 1) * ROW_H, after * ROW_H
     local at, room = scroll:GetVerticalScroll(), SHOWN * ROW_H
-    -- A section's first row brings its title in with it.
-    if focus > 1 and specs[focus - 1].head then top = top - ROW_H end
     if top < at then at = top elseif bottom > at + room then at = bottom - room end
     scroll:SetVerticalScroll(math.max(0, math.min(#specs * ROW_H - room, at)))
 end
@@ -157,6 +163,27 @@ local function Focus(i)
 end
 
 -- the mouse over row i: its focus, unless the row came to a pointer standing still (padPointer)
+-- A controller cursor's arrow coming to row i and going: the game's own in its controller interface (which runs
+-- OnEnter as well, so twice is harmless) and an addon's window walk outside it (which runs only these) call a
+-- button's OnSmartNavSelect and OnSmartNavDeselect. On the Options page the focus mark goes with the arrow back
+-- to the list; the window on its own keeps it, the pad walking it there.
+local function NavSelect(i)
+    return function()
+        -- the list may scroll under a pointer standing still: the row coming under it is no pick of the mouse's
+        padPointer = { GetCursorPosition() }
+        Focus(i)
+    end
+end
+local function NavDeselect(i)
+    return function()
+        if window.over and focus == i then
+            focus = 0
+            armed = nil
+            Refresh()
+        end
+    end
+end
+
 local function MouseFocus(i)
     if padPointer then
         local x, y = GetCursorPosition()
@@ -295,6 +322,7 @@ local function BuildRow(parent, i, spec)
                 glow:SetAllPoints()
                 glow:SetColorTexture(1, 0.82, 0, 0.3)
                 step:SetScript("OnEnter", function() MouseFocus(i) end)
+                step.OnSmartNavSelect, step.OnSmartNavDeselect = NavSelect(i), NavDeselect(i)
                 step:SetScript("OnClick", function()
                     focus = i
                     Act(i, side[2])
@@ -313,6 +341,7 @@ local function BuildRow(parent, i, spec)
     -- The mouse: over a row is its focus; a click is A, on a slider left adds and right takes away.
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row:SetScript("OnEnter", function() MouseFocus(i) end)
+    row.OnSmartNavSelect, row.OnSmartNavDeselect = NavSelect(i), NavDeselect(i)
     row:SetScript("OnClick", function(_, button)
         focus = i
         if spec.slider then Act(i, button == "RightButton" and -1 or 1) else Act(i, 0) end

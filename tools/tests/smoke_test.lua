@@ -881,10 +881,34 @@ local soon = timers[#timers]
 if type(soon) == "function" then soon() end
 local own = _G.FlickChatOptions
 Is("picking it there opens the settings", own ~= nil and own.shown, true)
+-- on the page a controller cursor walks the rows (the game's; an addon's window walk outside the controller
+-- interface): its arrow lights the row it comes to, and going back to the list takes the light with it
+local rowList = {}
+for _, f in ipairs(frames) do
+    if f.lit and f.parent and f.parent.parent == own.scroll then rowList[#rowList + 1] = f end
+end
+Is("on the page the pad is the cursor's, not the window's", own.padButtons, false)
+rowList[3].OnSmartNavSelect(rowList[3])
+Is("a cursor's arrow coming to a row lights it", rowList[3].lit.shown, true)
+rowList[3].OnSmartNavDeselect(rowList[3])
+Is("going back to the list takes the light with it", rowList[3].lit.shown, false)
+rowList[5].OnSmartNavSelect(rowList[5])
+rowList[7].scripts.OnEnter(rowList[7])
+Is("a row the arrow's scrolling brings under a pointer standing still takes no focus", rowList[5].lit.shown, true)
+rowList[5].OnSmartNavDeselect(rowList[5])
+-- the walk scrolls nothing and stops only on rows in view: the next stop each way stays in sight
+local last = #rowList
+rowList[last - 1].OnSmartNavSelect(rowList[last - 1])
+Is("near the end the row after the arrow's is in view", last * 26 <= (own.scroll.scrolled or 0) + 15 * 26, true)
+rowList[20].OnSmartNavSelect(rowList[20])
+Is("back up, the stop before it is in view, the title between with it", (18 - 1) * 26 >= (own.scroll.scrolled or 0), true)
 generic.Hide(own)
 generic.Hide(listed.frame)
 SlashCmdList.FLICKCHAT("options")
 Is("/flick options opens them too", own.shown, true)
+rowList[2].OnSmartNavSelect(rowList[2])
+rowList[2].OnSmartNavDeselect(rowList[2])
+Is("on its own the window keeps its light when a cursor leaves", rowList[2].lit.shown, true)
 -- the first row is the typing language: A turns to the next whose words are there, and round to the game's own
 own.scripts.OnGamePadButtonDown(own, "PAD1")
 Is("A on the first row turns to the next language", ns.profile.language, "ptBR")
