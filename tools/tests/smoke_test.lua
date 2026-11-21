@@ -697,6 +697,16 @@ Is("and RB the one after it", overrides.PADRSHOULDER == "FlickChatTabNext"
     and _G.FlickChatTabNext.attrs.clickbutton == _G.ChatFrame3Tab, true)
 Is("each click on the press, once", _G.FlickChatTabNext.attrs.type == "click"
     and _G.FlickChatTabNext.attrs.useOnKeyDown == true, true)
+-- RB's click: the game shows the next tab and hides the one left, its typing line shut with it; the new tab's line
+-- opens, and the bumpers' next clicks follow the tab now shown
+local opened = false
+rawset(tabFrames[3], "editBox", { HasFocus = function() return false end, IsForbidden = function() return false end,
+    SetFocus = function() opened = true end })
+function FCFDock_GetSelectedWindow() return tabFrames[3] end
+_G.FlickChatTabNext.scripts.PostClick(_G.FlickChatTabNext)
+Is("after a flip the new tab's typing line opens", opened, true)
+Is("and LB now clicks the tab it came from, RB nothing past the last", _G.FlickChatTabPrev.attrs.clickbutton == _G.ChatFrame2Tab
+    and _G.FlickChatTabNext.attrs.clickbutton == nil, true)
 padDown[10] = true
 held()
 padDown[10], padDown[5] = nil, nil

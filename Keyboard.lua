@@ -1271,6 +1271,18 @@ function Fit.TabTargets()
     tabs.Next:SetAttribute("clickbutton", after and _G[after:GetName() .. "Tab"] or nil)
 end
 
+-- A tab clicked while View is held, outside the game's controller interface: the game hides the tab left, and its
+-- typing line with it, which shuts chat (2026-11-21: "hides the chat controls"). Inside that interface it gives the
+-- new tab the pad's focus and its line opens; here the new tab's line is opened as a click on it opens it, so the
+-- keyboard is back at once and typing goes on there.
+function Fit.TabFollow()
+    local hold, dock = kb and kb.viewHold, GENERAL_CHAT_DOCK
+    if not (hold and hold.tabs) or not dock or dock:IsForbidden() or not FCFDock_GetSelectedWindow then return end
+    local shown = FCFDock_GetSelectedWindow(dock)
+    local edit = shown and shown.editBox
+    if edit and not edit:IsForbidden() and not edit:HasFocus() then edit:SetFocus() end
+end
+
 -- View held outside the game's controller interface: LB and RB flip the chat tabs. The game's own bumpers on its
 -- tabs are there only inside that interface, and a tab selected by our code is refused, so two secure buttons click
 -- the tab before and after the shown one, bound to the bumpers while View is held (priority bindings, over another
@@ -1292,8 +1304,11 @@ function Fit.TabKeys(on)
             -- one click a press, on the press: View let go before the bumper is would leave a release unheard
             button:SetAttribute("useOnKeyDown", true)
             button:RegisterForClicks("AnyDown", "AnyUp")
-            -- the tab shown has changed: the next press's targets follow it
-            button:SetScript("PostClick", function() Fit.TabTargets() end)
+            -- the tab shown has changed: its line opens, and the next press's targets follow it
+            button:SetScript("PostClick", function()
+                Fit.TabFollow()
+                Fit.TabTargets()
+            end)
             tabs[way] = button
         end
         Fit.tabKeys = tabs
@@ -2998,7 +3013,10 @@ function ns.Ready()
         hooksecurefunc("FCFDock_SelectWindow", function()
             C_Timer.After(0, function()
                 ns.FadeLines()
-                if kb and kb.viewHold then Fit.TabTargets() end
+                if kb and kb.viewHold then
+                    Fit.TabFollow()
+                    Fit.TabTargets()
+                end
             end)
         end)
     end
