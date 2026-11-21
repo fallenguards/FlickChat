@@ -297,16 +297,30 @@ local function Message()
     return text:match("^%s*(.-)%s*$")
 end
 
+-- The phrase page: opened by holding A (or a flick with A down) and up until A is held again, so both sticks are
+-- free to flick phrases.
 local function OpenPhrases()
     if S.aTimer then S.aTimer:Cancel() end
-    S.aTimer, S.phrases, S.phraseList = nil, true, PhrasePicks()
+    S.aTimer, S.phrases, S.phraseList, S.phraseKeep = nil, true, PhrasePicks(), false
     Paint()
+end
+
+-- A held again on the page: back to letters, what is typed kept.
+function Fit.ClosePhrases()
+    S.phrases, S.phraseSave, S.phraseNoText, S.phraseKeep = false, false, false, false
+    Paint()
+end
+
+-- Whether the next phrase flicked goes at once: on an empty line, unless RT came first (phraseKeep) or the setting
+-- has phrases always join the line.
+function Fit.PhraseSends()
+    return not ns.profile.phraseFill and not S.phraseKeep and not (Word() or S.committed:find("%S"))
 end
 
 -- draft: an unsent chat message closed with B, back in the box the next time chat opens empty.
 local Send, draft
 
--- Save mode (A held, then X): the message replaces the flicked slot's phrase and the box empties.
+-- Save mode (X on the phrase page): the message replaces the flicked slot's phrase and the box empties.
 local function SavePhrase(digit)
     local text = Message()
     ns.SetPhrase(digit, text)
@@ -318,22 +332,22 @@ local function SavePhrase(digit)
     Show()
 end
 
--- Phrases join the message as words; begun on an empty line, the message goes when A is let go.
+-- Phrases join the message as words; one flicked on an empty line goes at once (Fit.PhraseSends).
 local function SayPhrase(pick, digit)
     S.phraseNoText = false
     if not pick then return end
     S.phraseUsed = true
     Flash(digit)
     Use("phrase")
+    local now = Fit.PhraseSends()
     local word = Word()
-    local empty = not word and not S.committed:find("%S")
     if word then Commit(word, true) end
     -- As written: "ty" stays "ty" at a sentence's start.
     local before = S.committed
     S.committed = before .. Lead() .. pick.label .. " "
     S.undo = { committed = before, flicks = "", shown = 0, after = S.committed }
     S.autoSpace = true
-    S.phraseSend = S.phraseSend or (empty and not ns.profile.phraseFill)
+    if now then return Send() end
     Guess()
     Show()
 end
@@ -391,7 +405,13 @@ local function Emit(digit)
     Sync()
     S.forget, S.draftBack = nil, nil
     if ns.practice then ns.practice.Flick() end
-    if S.aDown and not S.phrases then OpenPhrases() end
+    if S.aDown and not S.phrases then
+        OpenPhrases()
+    elseif S.aDown and S.aTimer then
+        -- a phrase flicked with A down on the page: no going back, no send when it is let go
+        S.aTimer:Cancel()
+        S.aTimer = nil
+    end
     if S.phrases then
         if S.phraseSave then return SavePhrase(digit) end
         return SayPhrase(S.phraseList[digit], digit)
@@ -902,7 +922,7 @@ local function Reset(text)
     S.guesses, S.stems, S.shown, S.slots, S.undo = {}, {}, 0, {}, nil
     S.autoSpace, S.caps, S.capsLock, S.symbols, S.wheel = false, false, false, false, nil
     S.exact, S.box, S.naming, S.phrases, S.aDown = false, nil, nil, false, false
-    S.phraseSave, S.phraseNoText, S.phraseSend, S.forget = false, false, false, nil
+    S.phraseSave, S.phraseNoText, S.phraseKeep, S.forget = false, false, false, nil
     if S.move then
         S.move.ticker:Cancel()
         S.move = nil
@@ -1289,9 +1309,9 @@ local function Press(button)
         return Show()
     end
     if (button == "PADLTRIGGER" or button == "PADRTRIGGER") and Fit.Trigger(button) then return end
-    if button == "PADRTRIGGER" and S.phrases and S.phraseSend then
-        -- The phrases flicked so far start a sentence: letting go of A sends nothing.
-        S.phraseSend = false
+    if button == "PADRTRIGGER" and S.phrases and Fit.PhraseSends() then
+        -- The next phrases join the line, to go with A, instead of each going at once.
+        S.phraseKeep = true
         Paint()
     elseif button == "PADRTRIGGER" then
         Accept()
@@ -1319,8 +1339,8 @@ local function Press(button)
         Paint()
     elseif button == "PADLSTICK" then
         Capital()
-    elseif button == "PAD3" and S.aDown then
-        -- A held, then X: the next flick saves the message as that slot's phrase.
+    elseif button == "PAD3" and (S.aDown or S.phrases) then
+        -- X on the phrase page (or with A held): the next flick saves the message as that slot's phrase.
         if not S.phrases then OpenPhrases() end
         local typed = Message() ~= ""
         S.phraseSave, S.phraseNoText = typed, not typed
@@ -1335,12 +1355,14 @@ local function Press(button)
     elseif button == "PAD4" then
         OpenWheel()
     elseif button == "PAD1" then
-        -- Tap: send. Held (or a flick while down): the quick phrases.
+        -- Tap: send. Held: the phrase page, or from it back to letters. A flick with A down opens it too.
         S.aDown, S.phraseUsed = true, false
+        local onPage = S.phrases
         if S.aTimer then S.aTimer:Cancel() end
         S.aTimer = C_Timer.NewTimer(HOLD_DELAY, function()
             S.aTimer = nil
-            if S.aDown and box then OpenPhrases() end
+            if not (S.aDown and box) then return end
+            if onPage then Fit.ClosePhrases() else OpenPhrases() end
         end)
     elseif button == "PADBACK" then
         HoldView()
@@ -1362,14 +1384,9 @@ local function Unpress(button)
         local tapped = S.aTimer ~= nil
         if S.aTimer then S.aTimer:Cancel() end
         S.aDown, S.aTimer = false, nil
-        if S.phrases then
-            local send = S.phraseSend and box and Message() ~= ""
-            S.phrases, S.phraseSave, S.phraseNoText, S.phraseSend = false, false, false, false
-            if send then return Send() end
-            if box or S.preview then Paint() end
-        elseif tapped and box then
-            Send()
-        end
+        -- A tap sends, on the phrase page as on letters; the page stays up until A is held again.
+        if tapped and box then return Send() end
+        if box or S.preview then Paint() end
     end
 end
 
@@ -1582,10 +1599,11 @@ local function Hint()
     if S.draftBack then return L["DRAFT_BACK"]:format(Glyph("PADBACK")) end
     if S.forget then return L["FORGET_ASK"]:format(ns.Lower(S.forget), Glyph("PAD1")) end
     if S.phrases then
-        if S.phraseSave then return L["HINT_PHRASE_SAVE"]:format(Glyph("PADLTRIGGER"), Glyph("PAD1")) end
+        if S.phraseSave then return L["HINT_PHRASE_SAVE"]:format(Glyph("PADLTRIGGER")) end
         if S.phraseNoText then return L["PHRASE_NEED_TEXT"]:format(Glyph("PAD1"), Glyph("PAD3")) end
-        local sends = not ns.profile.phraseFill and (S.phraseSend or not (Word() or S.committed:find("%S")))
-        if not sends then return L["HINT_PHRASES_FILL"]:format(Glyph("PAD3"), Glyph("PAD1")) end
+        if not Fit.PhraseSends() then
+            return L["HINT_PHRASES_FILL"]:format(Glyph("PAD1"), Glyph("PAD3"), Glyph("PAD1"))
+        end
         return L["HINT_PHRASES"]:format(Glyph("PADRTRIGGER"), Glyph("PAD3"), Glyph("PAD1"))
     end
     if S.naming then
@@ -1627,7 +1645,7 @@ local function Labels()
     labels.PAD4 = S.lesson and L["LESSON_SKIP"] or L["CHANNEL"]
     labels.PAD3 = S.phrases and L["SAVE_PHRASE"] or S.symbols and L["LETTERS"] or L["SYMBOLS"]
     -- In a fight the game lets no addon close chat: B puts the keyboard away and the game's own B closes it.
-    labels.PAD2, labels.PAD1 = L[InCombatLockdown() and "CLOSE_FIGHT" or "CLOSE"], L["SEND_PHRASES"]
+    labels.PAD2, labels.PAD1 = L[InCombatLockdown() and "CLOSE_FIGHT" or "CLOSE"], L[S.phrases and "SEND_LETTERS" or "SEND_PHRASES"]
     -- A settings box: A saves what is typed, B leaves it as it was; no channels there.
     if box and not box.chatFrame then
         labels.PAD1, labels.PAD2, labels.PAD4 = L["SAVE"], L["CANCEL"], ""

@@ -685,14 +685,50 @@ Is("hidden hints hide them", marks.shown, false)
 Press("PADRSTICK")
 Is("and bring them back", marks.shown, true)
 
--- quick phrases chained while A is held go as one message
+-- quick phrases: holding A opens their page, up until A is held again, so both sticks are free (2026-11-21)
+local function HoldA()
+    Down("PAD1")
+    local hold = timers[#timers]
+    if type(hold) == "table" and not hold.dead then hold.fn() end
+    Up("PAD1")
+end
+Open()
 local count = #sent
-Down("PAD1")
+HoldA()
+Is("holding A opens the phrase page and it stays when A is let go", T.state.phrases == true and #sent == count, true)
+Has("its hint says a phrase goes at once", Told(), "sends at once")
+Has("and that holding A goes back", Told(), "Hold [PAD1] to go back")
+Flick(5)
+Is("on an empty line a phrase flicked with the right stick goes at once", #sent, count + 1)
+Is("as itself", (sent[#sent] or ""):lower(), ns.Phrase(5):lower())
+Open()
+count = #sent
+HoldA()
+Press("PADRTRIGGER")
+Has("after RT the hint says A sends the line", Told(), "[PAD1] sends it")
 Flick(1)
+Flick(6)
+Is("after RT phrases join the line, nothing sent", #sent, count)
+Press("PAD1")
+Is("a tap of A sends them as one message", #sent, count + 1)
+Has("with both phrases in it", (sent[#sent] or ""):lower(), ns.Phrase(6):lower())
+Open()
+count = #sent
+Type("hello")
+HoldA()
 Flick(2)
-Is("phrases held back while A is down", #sent, count)
+Is("with text on the line a phrase joins it, nothing sent", #sent, count)
+Has("the line holds it", (box.text or ""):lower(), ns.Phrase(2):lower())
+HoldA()
+Is("holding A again goes back to letters", T.state.phrases, false)
+Has("the line kept", (box.text or ""):lower(), "hello")
+Down("PAD1")
+Flick(3)
 Up("PAD1")
-Is("they send together on letting go", #sent, count + 1)
+Is("a flick with A down still opens the page and says the phrase, and the page stays", T.state.phrases == true
+    and (box.text or ""):lower():find(ns.Phrase(3):lower(), 1, true) ~= nil and #sent == count, true)
+Press("PAD1")
+Is("then a tap of A sends the line", #sent, count + 1)
 
 -- profiles (GitHub issue #2; as WoW addons keep settings): each character on one, Default shared by all at first
 local toc = io.open(dir .. "/FlickChat.toc"):read("a")
