@@ -108,6 +108,12 @@ end
 local AGAIN = 5
 local armed
 
+-- Where the pointer stood at the last pad press here. A row the d-pad scrolled under a pointer standing still is
+-- no pick of the mouse's and takes no focus from it: on 2026-11-21 (/fcdev profile) the walk to New profile ended
+-- on the row under the resting pointer, its OnEnter firing as the list scrolled. A pointer moved since is the
+-- mouse's again.
+local padPointer
+
 local function ValueText(spec)
     if spec.slider then return ns.L["SIZE_VALUE"]:format(spec.slider[1]() or 100) end
     if spec.pick then return spec.pick.text() end
@@ -148,6 +154,16 @@ local function Focus(i)
     if armed and armed.row ~= i then armed = nil end
     Follow()
     Refresh()
+end
+
+-- the mouse over row i: its focus, unless the row came to a pointer standing still (padPointer)
+local function MouseFocus(i)
+    if padPointer then
+        local x, y = GetCursorPosition()
+        if x == padPointer[1] and y == padPointer[2] then return end
+        padPointer = nil
+    end
+    Focus(i)
 end
 
 local function Step(by)
@@ -278,7 +294,7 @@ local function BuildRow(parent, i, spec)
                 local glow = step:CreateTexture(nil, "HIGHLIGHT")
                 glow:SetAllPoints()
                 glow:SetColorTexture(1, 0.82, 0, 0.3)
-                step:SetScript("OnEnter", function() Focus(i) end)
+                step:SetScript("OnEnter", function() MouseFocus(i) end)
                 step:SetScript("OnClick", function()
                     focus = i
                     Act(i, side[2])
@@ -296,7 +312,7 @@ local function BuildRow(parent, i, spec)
     end
     -- The mouse: over a row is its focus; a click is A, on a slider left adds and right takes away.
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    row:SetScript("OnEnter", function() Focus(i) end)
+    row:SetScript("OnEnter", function() MouseFocus(i) end)
     row:SetScript("OnClick", function(_, button)
         focus = i
         if spec.slider then Act(i, button == "RightButton" and -1 or 1) else Act(i, 0) end
@@ -347,11 +363,16 @@ local function Build()
     window.keys:SetWordWrap(false)
     window:SetScript("OnGamePadButtonDown", function(_, button)
         local press = PRESSES[button]
-        if press then press() end
+        if press then
+            padPointer = { GetCursorPosition() }
+            press()
+        end
     end)
     window:SetScript("OnShow", function(self)
         self.keys:SetText(L["OPT_KEYS"]:format(Glyph("PADDUP"), Glyph("PADDDOWN"), Glyph("PAD1"), Glyph("PADDLEFT"),
             Glyph("PADDRIGHT"), Glyph("PAD2")))
+        -- laid into the game's page its own cursor walks the rows by their OnEnter: nothing held back there
+        padPointer = nil
         self.scroll:SetVerticalScroll(0)
         if self.over then
             self:EnableGamePadButton(false)

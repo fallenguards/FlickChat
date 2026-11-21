@@ -9,6 +9,8 @@ function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 function GetLocale() return "enUS" end
 function GetBindingText(key) return "[" .. key .. "]" end
 function IsUsingGamepad() return true end
+-- the mouse pointer, standing still unless a test moves it
+function GetCursorPosition() return 0, 0 end
 focus = nil
 function GetCurrentKeyBoardFocus() return focus end
 function GetNumGroupMembers() return 2 end
@@ -985,6 +987,24 @@ Is("A twice on delete: Raid gone, this character on Default",
 Is("on Default the delete row says it stays", Showing("Default stays"), true)
 Pad("PAD1")
 Is("and A there deletes nothing", FlickChatDB.profiles.Default ~= nil, true)
+-- a row the d-pad scrolled under a pointer standing still takes no focus (2026-11-21, /fcdev profile); moved, it does
+local pointer = { 500, 300 }
+local realPointer = GetCursorPosition
+GetCursorPosition = function() return pointer[1], pointer[2] end
+Pad("PADDUP")
+local tipBefore, under = own.tip.text, nil
+for _, f in ipairs(frames) do
+    if f.lit and f.scripts.OnEnter and not f.lit.shown then
+        under = f
+        break
+    end
+end
+under.scripts.OnEnter(under)
+Is("a row coming under a pointer standing still takes no focus", own.tip.text == tipBefore and not under.lit.shown, true)
+pointer[1] = 520
+under.scripts.OnEnter(under)
+Is("once the pointer moves, the row under it has the focus", under.lit.shown, true)
+GetCursorPosition = realPointer
 UnitName, GetRealmName = realUnitName, nil
 own.scripts.OnGamePadButtonDown(own, "PAD2")
 Is("B shuts it", own.shown, false)

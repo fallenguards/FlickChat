@@ -20,7 +20,7 @@ read_globals = {
     "CreateFrame", "UIParent", "C_Timer", "C_ChatInfo", "time", "Settings", "wipe", "InputUtil", "STANDARD_TEXT_FONT", "issecretvalue",
     "SOUNDKIT", "InCombatLockdown", "GetBindingText", "C_Texture", "C_FriendList", "GetCVar", "IsInGuild", "GetTime",
     "GetLocale", "GetBindingAction", "ChatFrameUtil", "UnitIsUnit", "SetBinding", "IsInRaid", "GetUnitName",
-    "GetNumGuildMembers", "GetCurrentKeyBoardFocus", "GameFontNormal", "GameFontHighlight", "C_AddOns", "UnitName", "GetRealmName",
+    "GetNumGuildMembers", "GetCurrentKeyBoardFocus", "GameFontNormal", "GameFontHighlight", "C_AddOns", "UnitName", "GetRealmName", "GetCursorPosition",
     "UnitIsPlayer", "SaveBindings", "PlaySound", "NineSliceUtil", "NineSliceLayouts", "IsInGroup", "hooksecurefunc",
     "GetNumGroupMembers", "GetGuildRosterInfo", "GetCurrentBindingSet", "CreateSettingsListSectionHeaderInitializer",
     "CreateSettingsButtonInitializer", "ChatFrame1", "ChatFrame1EditBox", "C_GamePad", "BNGetNumFriends",
