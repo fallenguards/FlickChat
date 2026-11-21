@@ -59,15 +59,25 @@ ns.wordLists = {}
 function FlickChat_AddWords(code, data) ns.wordLists[code] = data end
 local LoadAddOn = C_AddOns.LoadAddOn
 
--- learned: word -> times sent; pairs: "word next" -> times ("<s>" starts a message); forms: a word's own capitals;
--- uses: how often each hint's action was used (a hint goes once learned); arm/rearm: a flick's tilt out and back;
--- phrases: the player's own quick phrases by slot (an empty slot is the language's default).
--- language: the language typed in (none: the game's own); wordsOf: whose learned words the four tables above
--- are; others: the other languages' learned words, by language.
-local DEFAULTS = { enabled = true, learned = {}, pairs = {}, forms = {}, forgot = {}, uses = {}, layout = "letters", size = 100,
-    arm = 0.55, rearm = 0.3, lessonDone = false, phrases = {}, wheelSize = 100, wordRoom = 100, others = {}, textSize = 100,
-    backOpacity = 90 }
-local DB_VERSION = 2
+-- The account's (ns.db): learned: word -> times sent; pairs: "word next" -> times ("<s>" starts a message); forms: a
+-- word's own capitals; uses: how often each hint's action was used (a hint goes once learned); arm/rearm: a flick's
+-- tilt out and back; wordsOf: whose learned words the four tables above are; others: the other languages' learned
+-- words, by language; profiles: the settings, by profile name.
+local DEFAULTS = { learned = {}, pairs = {}, forms = {}, forgot = {}, uses = {}, arm = 0.55, rearm = 0.3, lessonDone = false,
+    others = {}, profiles = {} }
+-- Profiles, as WoW addons keep settings: every setting the player picks is a profile's (ns.profile), and each
+-- character is on one, named in its own saved table (FlickChatCharDB.profile; none is Default, the profile every
+-- character shares at first). What is typed and learned, the stick's measured reach and the one-time notes stay
+-- the account's. phrases: the quick phrases by slot (an empty slot is the language's default); language: the
+-- language typed in (none: the game's own).
+local PROFILE_DEFAULTS = { enabled = true, layout = "letters", size = 100, phrases = {}, wheelSize = 100, wordRoom = 100,
+    textSize = 100, backOpacity = 90 }
+-- a profile's other settings: off (nil) until set
+local PROFILE_KEYS = { "lowercase", "matureFilter", "phraseFill", "hideLine", "hintsToggle", "guideOff", "stickTipsOff",
+    "shape", "language", "moveX", "moveY", "guideX", "guideY" }
+local DEFAULT_PROFILE = "Default"
+ns.DEFAULT_PROFILE = DEFAULT_PROFILE
+local DB_VERSION = 3
 local LEARN_CAP, PAIR_CAP = 2000, 4000
 local WHISPERS_KEPT = 10
 
@@ -80,6 +90,17 @@ function ns.Migrate(db)
         if db.languagesTold == true then db.languagesTold = 5 end
         -- a Spanish game typed with English's list before Spanish had one: what it learned there is Spanish
         if GameLanguage() == "esES" and not db.language and db.wordsOf == "enUS" then db.wordsOf = "esES" end
+    end
+    if (db.dbVersion or 0) < 3 then
+        -- the settings were the account's: they are the Default profile's now, which every character is on
+        db.profiles = db.profiles or {}
+        local default = db.profiles[DEFAULT_PROFILE] or {}
+        db.profiles[DEFAULT_PROFILE] = default
+        local function Move(key)
+            if db[key] ~= nil then default[key], db[key] = db[key], nil end
+        end
+        for key in pairs(PROFILE_DEFAULTS) do Move(key) end
+        for _, key in ipairs(PROFILE_KEYS) do Move(key) end
     end
     db.dbVersion = DB_VERSION
 end
@@ -178,7 +199,7 @@ local function WarnWheelOff()
     local mixin = FloatingChatFrameMixin
     local own = mixin and mixin.SetGamepadFocus
     local controller = InputUtil and InputUtil.IsGamepadUIEnabled and InputUtil.IsGamepadUIEnabled()
-    if wheelTold or not own or not controller or not ns.db.enabled then return end
+    if wheelTold or not own or not controller or not ns.profile.enabled then return end
     for i = 1, NUM_CHAT_WINDOWS or 10 do
         local chat = _G["ChatFrame" .. i]
         if chat and chat.SetGamepadFocus ~= own then
@@ -271,6 +292,10 @@ ns.events:SetScript("OnEvent", function(self, event, arg1, arg2)
         if db[key] == nil then db[key] = type(value) == "table" and {} or value end
     end
     ns.db = db
+    -- this character's own: the profile it is on
+    FlickChatCharDB = FlickChatCharDB or {}
+    ns.char = FlickChatCharDB
+    ns.UseProfile(ns.char.profile, true)
     -- the dev addon's /fcdev locale: the addon as on another language's game
     if db.devLocale then ns.locale = db.devLocale end
     if ns.ListOptions then ns.ListOptions() end
@@ -285,7 +310,7 @@ end)
 
 -- The language the player types in: their pick, else the game's own where there is a list for it.
 function ns.WantedLanguage()
-    local code = ns.db.language or GameLanguage()
+    local code = ns.profile.language or GameLanguage()
     return ns.LANGUAGE_NAMES[code] and code or "enUS"
 end
 
@@ -338,7 +363,7 @@ function ns.NextLanguage()
         local code = ns.LANGUAGES[(at + step - 1) % #ns.LANGUAGES + 1]
         if Loaded(code) then
             -- the game's own language is no pick: it is followed
-            if code == GameLanguage() then ns.db.language = nil else ns.db.language = code end
+            if code == GameLanguage() then ns.profile.language = nil else ns.profile.language = code end
             break
         end
     end
@@ -411,7 +436,114 @@ function ns.Tell(text, button)
     if button and button.SetText then button:SetText(ns.L["OPT_ARMED"]) end
 end
 
--- Quick phrases by slot (1-4 the left stick's up, right, down, left; 5-8 the right's): the player's own, else the
+-- Profiles (see PROFILE_DEFAULTS). A profile's missing settings are its defaults.
+local function Fill(profile)
+    for key, value in pairs(PROFILE_DEFAULTS) do
+        if profile[key] == nil then profile[key] = type(value) == "table" and {} or value end
+    end
+    return profile
+end
+
+local function Copy(from)
+    local out = {}
+    for key, value in pairs(from) do out[key] = type(value) == "table" and Copy(value) or value end
+    return out
+end
+
+-- Where a saved key lives: this character's profile for a setting, else the account's (the dev addon keeps and
+-- puts back keys of both).
+function ns.Holder(key)
+    if PROFILE_DEFAULTS[key] ~= nil then return ns.profile end
+    for _, setting in ipairs(PROFILE_KEYS) do
+        if setting == key then return ns.profile end
+    end
+    return ns.db
+end
+
+function ns.ProfileName() return ns.char.profile or DEFAULT_PROFILE end
+-- As the settings show it: Default in the player's language, the others as named.
+function ns.ProfileLabel(name)
+    name = name or ns.ProfileName()
+    return name == DEFAULT_PROFILE and ns.L["PROFILE_DEFAULT"] or name
+end
+
+-- Default first, the rest by name.
+function ns.ProfileNames()
+    local names = {}
+    for name in pairs(ns.db.profiles) do
+        if name ~= DEFAULT_PROFILE then names[#names + 1] = name end
+    end
+    table.sort(names)
+    table.insert(names, 1, DEFAULT_PROFILE)
+    return names
+end
+
+-- This character onto a profile (none, or one deleted meanwhile: Default); the keyboard and the typing lines take
+-- its settings at once. loading: at the addon's load, with nothing built yet.
+function ns.UseProfile(name, loading)
+    local profiles = ns.db.profiles
+    if not name or not profiles[name] then name = DEFAULT_PROFILE end
+    profiles[name] = Fill(profiles[name] or {})
+    ns.char.profile = name ~= DEFAULT_PROFILE and name or nil
+    ns.profile = profiles[name]
+    if loading then return end
+    if ns.Relayout then ns.Relayout() end
+    if ns.Relanguage then ns.Relanguage() end
+    if ns.FadeLines then ns.FadeLines() end
+end
+
+-- The settings row: on (by 1) or back (by -1) to the next profile, round to Default.
+function ns.NextProfile(by)
+    local names, at = ns.ProfileNames(), 1
+    for i, name in ipairs(names) do
+        if name == ns.ProfileName() then at = i end
+    end
+    ns.UseProfile(names[(at - 1 + (by or 1)) % #names + 1])
+end
+
+-- What New profile offers to name it: the character and its realm, as profile addons name a character's own.
+function ns.CharacterProfileName()
+    local name, realm = UnitName("player"), GetRealmName and GetRealmName()
+    return realm and realm ~= "" and ("%s - %s"):format(name or "", realm) or name or ""
+end
+
+-- New profile: a copy of the one this character is on, under the name typed, and this character onto it. A name
+-- already there: onto that profile, as it is.
+function ns.NewProfile(name)
+    name = (name or ""):match("^%s*(.-)%s*$")
+    if name == "" then return end
+    if not ns.db.profiles[name] then ns.db.profiles[name] = Copy(ns.profile) end
+    ns.UseProfile(name)
+end
+
+-- Copy from: every setting of another profile into this character's, in place (characters on it share the change).
+function ns.CopyProfile(from)
+    local source = ns.db.profiles[from]
+    if not source or source == ns.profile then return end
+    local settings = Copy(source)
+    wipe(ns.profile)
+    for key, value in pairs(settings) do ns.profile[key] = value end
+    ns.UseProfile(ns.ProfileName())
+    ns.Say(ns.L["PROFILE_COPIED"]:format(ns.ProfileLabel(from), ns.ProfileLabel()))
+end
+
+function ns.ResetProfile()
+    wipe(ns.profile)
+    ns.UseProfile(ns.ProfileName())
+    ns.Say(ns.L["PROFILE_RESET"]:format(ns.ProfileLabel()))
+end
+
+-- Delete: this character's profile goes and it is on Default; another character on it goes to Default at its next
+-- login. Default stays.
+function ns.DeleteProfile()
+    local name = ns.ProfileName()
+    if name == DEFAULT_PROFILE then return ns.Say(ns.L["PROFILE_KEEP_DEFAULT"]) end
+    ns.db.profiles[name] = nil
+    ns.UseProfile(DEFAULT_PROFILE)
+    ns.Say(ns.L["PROFILE_DELETED"]:format(name, ns.ProfileLabel()))
+end
+
+-- Quick phrases by slot (1-4 the left stick's up, right, down, left; 5-8 the right's): the profile's, else the
 -- language's default. A phrase emptied or set back to its default is the default again.
 local function DefaultPhrase(slot)
     local i = 0
@@ -421,15 +553,15 @@ local function DefaultPhrase(slot)
     end
 end
 
-function ns.Phrase(slot) return ns.db.phrases[slot] or DefaultPhrase(slot) end
+function ns.Phrase(slot) return ns.profile.phrases[slot] or DefaultPhrase(slot) end
 
 function ns.SetPhrase(slot, text)
     text = (text or ""):match("^%s*(.-)%s*$")
     if text == "" or text == DefaultPhrase(slot) then text = nil end
-    ns.db.phrases[slot] = text
+    ns.profile.phrases[slot] = text
 end
 
-function ns.ResetPhrases() wipe(ns.db.phrases) end
+function ns.ResetPhrases() wipe(ns.profile.phrases) end
 
 -- In the game's controller mode its Menu wheel's Chat shows the typing line (and so the keyboard) only with the IM
 -- chat style; with Classic nothing opens, the game's own chat included.
@@ -441,59 +573,59 @@ end
 -- What the settings window (Options.lua) and the first-login notice keep.
 local options = {}
 
-local function HidesBar() return ns.db.hintsToggle == nil or ns.db.hintsToggle == "bar" end
-local function HidesGuide() return ns.db.hintsToggle == nil or ns.db.hintsToggle == "guide" end
+local function HidesBar() return ns.profile.hintsToggle == nil or ns.profile.hintsToggle == "bar" end
+local function HidesGuide() return ns.profile.hintsToggle == nil or ns.profile.hintsToggle == "guide" end
 
 local function SetHides(bar, guide)
     if bar and guide then
-        ns.db.hintsToggle = nil
+        ns.profile.hintsToggle = nil
     else
-        ns.db.hintsToggle = bar and "bar" or guide and "guide" or "none"
+        ns.profile.hintsToggle = bar and "bar" or guide and "guide" or "none"
     end
 end
 
 -- What each row reads and writes, over the saved settings' own shapes (nil for off, the hidden flag turned round).
 local ROWS = {
-    lowercase = { function() return ns.db.lowercase == true end, function(on) ns.db.lowercase = on or nil end },
+    lowercase = { function() return ns.profile.lowercase == true end, function(on) ns.profile.lowercase = on or nil end },
     -- What the right stick press hides: hintsToggle is nil for both, "bar", "guide" or "none".
     -- IM style's typing line out of sight until chat opens, as Classic style's is.
-    hideLine = { function() return ns.db.hideLine == true end, function(on)
-        ns.db.hideLine = on or nil
+    hideLine = { function() return ns.profile.hideLine == true end, function(on)
+        ns.profile.hideLine = on or nil
         if ns.FadeLines then ns.FadeLines() end
     end },
-    stickTips = { function() return not ns.db.stickTipsOff end, function(on)
-        if on then ns.db.stickTipsOff = nil else ns.db.stickTipsOff = true end
+    stickTips = { function() return not ns.profile.stickTipsOff end, function(on)
+        if on then ns.profile.stickTipsOff = nil else ns.profile.stickTipsOff = true end
     end },
-    phraseSend = { function() return not ns.db.phraseFill end, function(on)
-        if on then ns.db.phraseFill = nil else ns.db.phraseFill = true end
+    phraseSend = { function() return not ns.profile.phraseFill end, function(on)
+        if on then ns.profile.phraseFill = nil else ns.profile.phraseFill = true end
     end },
-    matureFilter = { function() return ns.db.matureFilter == true end, function(on) ns.db.matureFilter = on or nil end },
+    matureFilter = { function() return ns.profile.matureFilter == true end, function(on) ns.profile.matureFilter = on or nil end },
     hideBar = { function() return HidesBar() end, function(on) SetHides(on, HidesGuide()) end },
     hideGuide = { function() return HidesGuide() end, function(on) SetHides(HidesBar(), on) end },
-    size = { function() return ns.db.size end, function(value)
-        ns.db.size = value
+    size = { function() return ns.profile.size end, function(value)
+        ns.profile.size = value
         if ns.Restyle then ns.Restyle() end
     end },
-    wordRoom = { function() return ns.db.wordRoom end, function(value)
-        ns.db.wordRoom = value
+    wordRoom = { function() return ns.profile.wordRoom end, function(value)
+        ns.profile.wordRoom = value
         if ns.Restyle then ns.Restyle() end
     end },
-    textSize = { function() return ns.db.textSize end, function(value)
-        ns.db.textSize = value
+    textSize = { function() return ns.profile.textSize end, function(value)
+        ns.profile.textSize = value
         if ns.Restyle then ns.Restyle() end
     end },
-    backOpacity = { function() return ns.db.backOpacity end, function(value)
-        ns.db.backOpacity = value
+    backOpacity = { function() return ns.profile.backOpacity end, function(value)
+        ns.profile.backOpacity = value
         if ns.Restyle then ns.Restyle() end
     end },
-    wheelSize = { function() return ns.db.wheelSize end, function(value) ns.db.wheelSize = value end },
+    wheelSize = { function() return ns.profile.wheelSize end, function(value) ns.profile.wheelSize = value end },
 }
 ns.optionRows = ROWS
 
 -- The keyboard's shape: wide (a stick either side of the guess words, no pick saved), or stacked, the sticks side
 -- by side with the words over them ("above") or under them ("below").
 function ns.Stacked()
-    local shape = ns.db.shape
+    local shape = ns.profile.shape
     return (shape == "above" or shape == "below") and shape or nil
 end
 
@@ -505,11 +637,11 @@ end
 function ns.NextShape()
     local shape = ns.Stacked()
     if shape == "above" then
-        ns.db.shape = "below"
+        ns.profile.shape = "below"
     elseif shape == "below" then
-        ns.db.shape = nil
+        ns.profile.shape = nil
     else
-        ns.db.shape = "above"
+        ns.profile.shape = "above"
     end
     if ns.Restyle then ns.Restyle() end
 end
@@ -609,8 +741,8 @@ function ns.ShowAddress(url)
     copy.edit:HighlightText()
 end
 
--- One box for whichever phrase row was pressed: exactly over that row's button and opaque, so the phrase is typed
--- in the button's place.
+-- One box for whichever typing row was pressed (slot: a phrase's, "words" the player's words, "profile" a new
+-- profile's name): exactly over that row's button and opaque, so it is typed in the button's place.
 local function EditPhrase(button, slot)
     local edit = options.phraseEdit
     if not edit then
@@ -630,6 +762,8 @@ local function EditPhrase(button, slot)
         edit:SetScript("OnEnterPressed", function(self)
             if self.slot == "words" then
                 ns.SetMyWords(self:GetText())
+            elseif self.slot == "profile" then
+                ns.NewProfile(self:GetText())
             else
                 ns.SetPhrase(self.slot, self:GetText())
             end
@@ -644,11 +778,19 @@ local function EditPhrase(button, slot)
         options.phraseEdit = edit
     end
     edit.slot, edit.button = slot, button
-    edit.shows = slot == "words" and ns.MyWordsText or function() return ns.Phrase(slot) or "" end
-    edit:SetMaxLetters(slot == "words" and 400 or 120)
+    -- what the row shows once the box goes, what the box starts with, how long it may be
+    local text, most
+    if slot == "words" then
+        edit.shows, text, most = ns.MyWordsText, ns.db.myWords or "", 400
+    elseif slot == "profile" then
+        edit.shows, text, most = function() return ns.L["OPT_PROFILE_NEW_BUTTON"] end, ns.CharacterProfileName(), 48
+    else
+        edit.shows, text, most = function() return ns.Phrase(slot) or "" end, ns.Phrase(slot) or "", 120
+    end
+    edit:SetMaxLetters(most)
     edit:ClearAllPoints()
     edit:SetAllPoints(button)
-    edit:SetText(slot == "words" and (ns.db.myWords or "") or ns.Phrase(slot) or "")
+    edit:SetText(text)
     edit:Show()
     edit:SetFocus()
     edit:HighlightText()
@@ -725,7 +867,7 @@ function ns.StyleNotice()
             row.line:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -gap)
             row.less:SetPoint("LEFT", row.line, "RIGHT", 14, 0)
             function row.Tell()
-                row.line:SetText(L[spec.format]:format(ns.db[spec.key] or 100))
+                row.line:SetText(L[spec.format]:format(ns.profile[spec.key] or 100))
                 row.less:SetText(Glyph(spec.keys[1]))
                 row.more:SetText(Glyph(spec.keys[2]))
             end
@@ -735,7 +877,7 @@ function ns.StyleNotice()
                 button:SetText(label)
                 button:SetPoint("LEFT", after, "RIGHT", 6, 0)
                 button:SetScript("OnClick", function()
-                    ns.db[spec.key] = math.max(spec.low, math.min(spec.high, (ns.db[spec.key] or 100) + by))
+                    ns.profile[spec.key] = math.max(spec.low, math.min(spec.high, (ns.profile[spec.key] or 100) + by))
                     row.Tell()
                     if ns.Restyle then ns.Restyle() end
                 end)
@@ -1160,7 +1302,8 @@ SLASH_FLICKCHAT1 = "/flick"
 SLASH_FLICKCHAT2 = "/flickchat"
 SLASH_FLICKCHAT3 = "/fc"
 SlashCmdList.FLICKCHAT = function(msg)
-    local db = ns.db
+    -- every setting a slash command sets is the profile's
+    local db = ns.profile
     if not db then return end
     local cmd, value = (msg or ""):lower():match("^%s*(%S*)%s*(%S*)")
     if cmd == "size" and tonumber(value) then

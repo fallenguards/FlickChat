@@ -21,7 +21,7 @@ local function Specs()
     local L, R = ns.L, ns.optionRows
     local list = {}
     local function Head(text) list[#list + 1] = { head = text } end
-    local function Check(key, label) list[#list + 1] = { check = R[key], label = label } end
+    local function Check(key, label, tip) list[#list + 1] = { check = R[key], label = label, tip = tip } end
     local function Slider(key, label, low, high, tip)
         list[#list + 1] = { slider = R[key], label = label, low = low, high = high, tip = tip }
     end
@@ -57,22 +57,72 @@ local function Specs()
             function(well) return ns.EditPhrase(well, slot) end, L["OPT_PHRASE_TIP"])
     end
     Button(L["OPT_PHRASES"], L["OPT_RESET"], function() ns.ResetPhrases() end)
+    -- The profile this character is on, a new one, another's settings copied in, a reset, a delete. pick: left
+    -- and right step (step), A acts (act); twice: A asks for a second press first.
+    local function Pick(label, text, step, act, tip, twice)
+        list[#list + 1] = { pick = { text = text, step = step, act = act }, label = label, tip = tip, twice = twice }
+    end
+    Head(L["OPT_HEAD_PROFILES"])
+    Pick(L["OPT_PROFILE"], function() return ns.ProfileLabel() end, function(by) ns.NextProfile(by) end,
+        function() ns.NextProfile(1) end, L["OPT_PROFILE_TIP"])
+    Button(L["OPT_PROFILE_NEW"], L["OPT_PROFILE_NEW_BUTTON"], function(well) return ns.EditPhrase(well, "profile") end,
+        L["OPT_PROFILE_NEW_TIP"])
+    -- Copy from: one of the other profiles, kept by name while it is there
+    local from
+    local function Others()
+        local others = {}
+        for _, name in ipairs(ns.ProfileNames()) do
+            if name ~= ns.ProfileName() then others[#others + 1] = name end
+        end
+        return others
+    end
+    local function From()
+        local others = Others()
+        for _, name in ipairs(others) do
+            if name == from then return from end
+        end
+        from = others[1]
+        return from
+    end
+    Pick(L["OPT_PROFILE_COPY"], function() return From() and ns.ProfileLabel(From()) or L["OPT_PROFILE_NONE"] end,
+        function(by)
+            local others, at = Others(), 1
+            if #others == 0 then return end
+            for i, name in ipairs(others) do
+                if name == From() then at = i end
+            end
+            from = others[(at - 1 + by) % #others + 1]
+        end,
+        function() if From() then ns.CopyProfile(From()) end end, L["OPT_PROFILE_COPY_TIP"], function() return From() ~= nil end)
+    Button(L["OPT_PROFILE_RESET"], L["OPT_PROFILE_RESET_BUTTON"], function() ns.ResetProfile() end, L["OPT_PROFILE_RESET_TIP"])
+    list[#list].twice = function() return true end
+    Button(L["OPT_PROFILE_DELETE"], function()
+        return ns.ProfileName() == ns.DEFAULT_PROFILE and L["OPT_PROFILE_DEFAULT_STAYS"] or L["OPT_PROFILE_DELETE_BUTTON"]
+    end, function() ns.DeleteProfile() end, L["OPT_PROFILE_DELETE_TIP"])
+    list[#list].twice = function() return ns.ProfileName() ~= ns.DEFAULT_PROFILE end
     return list
 end
 
+-- A row that takes A twice (a profile reset, delete or copy): the row asked again, and since when. Moving off the
+-- row or waiting AGAIN seconds asks from the start.
+local AGAIN = 5
+local armed
+
 local function ValueText(spec)
     if spec.slider then return ns.L["SIZE_VALUE"]:format(spec.slider[1]() or 100) end
+    if spec.pick then return spec.pick.text() end
     if type(spec.text) == "function" then return spec.text() end
     return spec.text or ""
 end
 
 local function Refresh()
+    if armed and GetTime() - armed.at > AGAIN then armed = nil end
     for i, row in ipairs(rows) do
         local spec = specs[i]
         if spec.check then
             row.mark:SetShown(spec.check[1]() == true)
         elseif not spec.head then
-            row.value:SetText(ValueText(spec))
+            row.value:SetText(armed and armed.row == i and ns.L["OPT_AGAIN"]:format(Glyph("PAD1")) or ValueText(spec))
         end
         row.lit:SetShown(i == focus)
     end
@@ -95,6 +145,7 @@ end
 
 local function Focus(i)
     focus = i
+    if armed and armed.row ~= i then armed = nil end
     Follow()
     Refresh()
 end
@@ -110,11 +161,21 @@ local function Step(by)
     end
 end
 
--- A row worked: A (by 0) flips a box or presses a button; left and right (by -1, 1) move a slider.
+-- A row worked: A (by 0) flips a box or presses a button; left and right (by -1, 1) move a slider or a pick.
 local function Act(i, by)
     local spec, row = specs[i], rows[i]
     if not spec or spec.head then return end
-    if spec.check then
+    if by == 0 and spec.twice and spec.twice() then
+        -- the first A only asks for the second
+        if not (armed and armed.row == i and GetTime() - armed.at <= AGAIN) then
+            armed = { row = i, at = GetTime() }
+            return Refresh()
+        end
+    end
+    armed = nil
+    if spec.pick then
+        if by == 0 then spec.pick.act() else spec.pick.step(by) end
+    elseif spec.check then
         if by ~= 0 then return end
         spec.check[2](not spec.check[1]())
     elseif spec.slider then
@@ -203,9 +264,11 @@ local function BuildRow(parent, i, spec)
         row.value:SetWordWrap(false)
         function well.SetText(_, text) row.value:SetText(text) end
         row.well = well
-        if spec.slider then
-            -- Less and more at the value's two ends: stops of their own for the game's cursor, and for the mouse.
-            for _, side in ipairs({ { "LEFT", -1, "-" }, { "RIGHT", 1, "+" } }) do
+        if spec.slider or spec.pick then
+            -- Less and more (a pick: the one before and after) at the value's two ends: stops of their own for the
+            -- game's cursor, and for the mouse.
+            local marks = spec.pick and { "<", ">" } or { "-", "+" }
+            for _, side in ipairs({ { "LEFT", -1, marks[1] }, { "RIGHT", 1, marks[2] } }) do
                 local step = CreateFrame("Button", nil, well)
                 step:SetSize(ROW_H - 4, ROW_H - 4)
                 step:SetPoint(side[1], well, side[1], 0, 0)
@@ -220,6 +283,12 @@ local function BuildRow(parent, i, spec)
                     focus = i
                     Act(i, side[2])
                 end)
+            end
+            if spec.pick then
+                -- a profile's name between the two marks, not under them
+                row.value:ClearAllPoints()
+                row.value:SetPoint("LEFT", well, "LEFT", ROW_H, 0)
+                row.value:SetPoint("RIGHT", well, "RIGHT", -ROW_H, 0)
             end
         end
         label:SetPoint("LEFT", row, "LEFT", 6, 0)

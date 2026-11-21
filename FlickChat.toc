@@ -7,6 +7,7 @@
 ## IconTexture: Interface\AddOns\FlickChat\media\icon
 ## Category: Chat
 ## SavedVariables: FlickChatDB
+## SavedVariablesPerCharacter: FlickChatCharDB
 ## X-Curse-Project-ID: 1800196
 ## DefaultState: enabled
 

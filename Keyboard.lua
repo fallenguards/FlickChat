@@ -79,7 +79,7 @@ local CELL_H, HUB_R, DOT, GAP, PAD = 34, 20, 12, 6, 16
 local CROSS_W, CROSS_H, MARK_X, MARK_Y = 250, 104, 18, 16
 -- The middle's width: the room the guess words have, by the settings page's percent, wider for larger text.
 local function CrossW()
-    return CROSS_W * (ns.db.wordRoom or 100) / 100 * math.max(1, (ns.db.textSize or 100) / 100)
+    return CROSS_W * (ns.profile.wordRoom or 100) / 100 * math.max(1, (ns.profile.textSize or 100) / 100)
 end
 -- A side word too long for its arm shrinks to fit, down to this share of its size; past that it is cut.
 local SIDE_SHRINK = 2 / 3
@@ -111,7 +111,7 @@ local function Use(action)
     if (uses[action] or 0) <= FLICK_TIP_USES then uses[action] = (uses[action] or 0) + 1 end
 end
 
-local function Groups() return S.symbols and SYMBOLS or ns.LAYOUTS[ns.db.layout] or ns.LAYOUTS.letters end
+local function Groups() return S.symbols and SYMBOLS or ns.LAYOUTS[ns.profile.layout] or ns.LAYOUTS.letters end
 
 local function EndsSentence(text) return text:match("^%s*$") or text:match("[%.!?]%s*$") end
 
@@ -128,7 +128,7 @@ end
 local function Cap(word)
     if S.capsLock then return ns.Upper(word) end
     -- Always lowercase: the player's setting, or a dev run's.
-    local lowercase = ns.db.lowercase or (ns.dev and ns.dev.lowercase) or ns.practice ~= nil
+    local lowercase = ns.profile.lowercase or (ns.dev and ns.dev.lowercase) or ns.practice ~= nil
     if lowercase then word = ns.Lower(word) end
     if S.caps or (not lowercase and EndsSentence(S.committed)) then return ns.Capital(word) end
     return word
@@ -136,7 +136,7 @@ end
 
 -- Flicks no word fits: each group's first letter, so the count still shows.
 local function Fallback()
-    local groups = ns.LAYOUTS[ns.db.layout] or ns.LAYOUTS.letters
+    local groups = ns.LAYOUTS[ns.profile.layout] or ns.LAYOUTS.letters
     return (S.flicks:gsub("%d", function(d) return ns.Characters(groups[tonumber(d)])[1] end))
 end
 
@@ -333,7 +333,7 @@ local function SayPhrase(pick, digit)
     S.committed = before .. Lead() .. pick.label .. " "
     S.undo = { committed = before, flicks = "", shown = 0, after = S.committed }
     S.autoSpace = true
-    S.phraseSend = S.phraseSend or (empty and not ns.db.phraseFill)
+    S.phraseSend = S.phraseSend or (empty and not ns.profile.phraseFill)
     Guess()
     Show()
 end
@@ -530,7 +530,8 @@ function Move.Place()
 end
 
 function Move.Start(guide)
-    local db = ns.db
+    -- the places and the size are the profile's
+    local db = ns.profile
     local keyX, keyY = guide and "guideX" or "moveX", guide and "guideY" or "moveY"
     local move = { guide = guide, keyX = keyX, keyY = keyY, x = db[keyX] or 0, y = db[keyY] or 0, size = db.size,
         lx = 0, ly = 0, ry = 0, last = GetTime(), sized = 0 }
@@ -568,7 +569,7 @@ function Move.Stick(which, x, y, len)
 end
 
 function Move.Press(button)
-    local db, move = ns.db, S.move
+    local db, move = ns.profile, S.move
     if button == "PAD1" then
         Move.End()
         ns.Say(L[move.guide and "MOVE_GUIDE_SAVED" or "MOVE_SAVED"])
@@ -1132,7 +1133,7 @@ local function OpenWheel()
         end
     end
     S.wheel = { pages = pages, page = page, at = 0 }
-    wheel:SetScale(WHEEL_SCALE * (ns.db.wheelSize or 100) / 100)
+    wheel:SetScale(WHEEL_SCALE * (ns.profile.wheelSize or 100) / 100)
     for _, st in pairs(sticks) do st.out, st.held, st.waiting = false, false, nil end
     if SOUNDKIT and SOUNDKIT.GAMEPAD_RADIAL_MENU_OPEN then PlaySound(SOUNDKIT.GAMEPAD_RADIAL_MENU_OPEN) end
     wheel:Show()
@@ -1314,7 +1315,7 @@ local function Press(button)
     elseif SLOT_OF[button] then
         TakeSlot(SLOT_OF[button])
     elseif button == "PADRSTICK" then
-        ns.db.guideOff = not ns.db.guideOff or nil
+        ns.profile.guideOff = not ns.profile.guideOff or nil
         Paint()
     elseif button == "PADLSTICK" then
         Capital()
@@ -1583,7 +1584,7 @@ local function Hint()
     if S.phrases then
         if S.phraseSave then return L["HINT_PHRASE_SAVE"]:format(Glyph("PADLTRIGGER"), Glyph("PAD1")) end
         if S.phraseNoText then return L["PHRASE_NEED_TEXT"]:format(Glyph("PAD1"), Glyph("PAD3")) end
-        local sends = not ns.db.phraseFill and (S.phraseSend or not (Word() or S.committed:find("%S")))
+        local sends = not ns.profile.phraseFill and (S.phraseSend or not (Word() or S.committed:find("%S")))
         if not sends then return L["HINT_PHRASES_FILL"]:format(Glyph("PAD3"), Glyph("PAD1")) end
         return L["HINT_PHRASES"]:format(Glyph("PADRTRIGGER"), Glyph("PAD3"), Glyph("PAD1"))
     end
@@ -1723,17 +1724,17 @@ end
 
 local function PaintPrompts()
     -- R3 hides the hints picked on the settings page: both (the default), the bar or the guide alone.
-    local reach = ns.db.hintsToggle or "both"
+    local reach = ns.profile.hintsToggle or "both"
     -- the guide being moved shows, whatever the player hid
     local moving = S.move ~= nil and S.move.guide == true
-    kb.guide:SetShown(not S.preview and (moving or not (ns.db.guideOff and (reach == "both" or reach == "guide"))))
+    kb.guide:SetShown(not S.preview and (moving or not (ns.profile.guideOff and (reach == "both" or reach == "guide"))))
     -- Under a settings box the bar always shows: it is the only word on how to save or leave.
     kb.bar:SetShown(not S.preview
-        and ((box ~= nil and not box.chatFrame) or not (ns.db.guideOff and (reach == "both" or reach == "bar"))))
-    Fit.ScrollMarks(ns.db.guideOff and (reach == "both" or reach == "bar"))
+        and ((box ~= nil and not box.chatFrame) or not (ns.profile.guideOff and (reach == "both" or reach == "bar"))))
+    Fit.ScrollMarks(ns.profile.guideOff and (reach == "both" or reach == "bar"))
     local toggle = kb.toggle
     SetIcon(toggle, "PADRSTICK")
-    local text = L[ns.db.guideOff and "HINTS_SHOW" or "HINTS_HIDE"]
+    local text = L[ns.profile.guideOff and "HINTS_SHOW" or "HINTS_HIDE"]
     if toggle.plain then text = toggle.plain .. " " .. text end
     toggle.label:SetText(text)
     -- Over the guide while it shows above the keyboard, else over the keyboard itself.
@@ -1757,7 +1758,7 @@ local function PaintPrompts()
         toggle.over, toggle.two = over, two
     end
     -- Both reminders go with the player's box on the settings page.
-    local tips = not ns.db.stickTipsOff
+    local tips = not ns.profile.stickTipsOff
     toggle.label:SetShown(tips)
     toggle.icon:SetShown(tips and toggle.plain == nil)
     caps.label:SetShown(tips)
@@ -1845,7 +1846,7 @@ Paint = function()
         kb.hintSize = size
     end
     -- Under the window, and gone with the hints the player hid; the lesson's lines always show.
-    kb.hint:SetText(text ~= "" and (S.lesson or S.forget or S.move or not ns.db.guideOff or S.symbols and (ns.db.uses.pick or 0) < PICK_TIP_USES) and text or nil)
+    kb.hint:SetText(text ~= "" and (S.lesson or S.forget or S.move or not ns.profile.guideOff or S.symbols and (ns.db.uses.pick or 0) < PICK_TIP_USES) and text or nil)
     -- The lesson's lines stand over the keyboard on a dark strip (chat sits low on most screens), clear of the
     -- guide and the reminders there; with the keyboard high on the screen they stay under it.
     -- Under the lesson's lines a row of its own for the skip reminder, with a little air between.
@@ -1854,7 +1855,7 @@ Paint = function()
     if S.lesson and (kb:GetTop() or 0) * kb:GetEffectiveScale() < UIParent:GetHeight() * UIParent:GetEffectiveScale() * 0.7 then
         lift = 14
         if kb.toggle.over == kb.guide then lift = lift + kb.guide:GetHeight() + 4 end
-        if not ns.db.stickTipsOff then lift = lift + TOGGLE_GAP + (kb.toggle.two and 36 or 18) end
+        if not ns.profile.stickTipsOff then lift = lift + TOGGLE_GAP + (kb.toggle.two and 36 or 18) end
         lift = lift + row
     end
     if kb.hintLift ~= lift then
@@ -1971,15 +1972,15 @@ end
 
 function ns.Restyle()
     if not kb then return end
-    local size = (ns.db.size or 100) / 100
+    local size = (ns.profile.size or 100) / 100
     kb:SetScale(768 / 1080 * size / UIParent:GetEffectiveScale())
     -- The text's own size: the boxes grow to hold larger letters, the guesses' middle to hold larger words.
-    local textScale = (ns.db.textSize or 100) / 100
+    local textScale = (ns.profile.textSize or 100) / 100
     for key, base in pairs(TEXT.base) do TEXT[key] = math.floor(base * textScale + 0.5) end
     local cellH = math.max(CELL_H, TEXT.letter + 16)
     local crossH = CROSS_H + 2.5 * math.max(0, TEXT.guess - TEXT.base.guess)
     -- the dark backing at the player's opacity, none at 0; the border stays solid
-    local opacity = (ns.db.backOpacity or 90) / 100
+    local opacity = (ns.profile.backOpacity or 90) / 100
     for _, frame in ipairs({ kb, kb.guide }) do
         frame.back:SetAlpha(opacity)
         frame.back:SetShown(opacity > 0)
@@ -1989,7 +1990,7 @@ function ns.Restyle()
     local font = TEXT.font
     local widest = 0
     kb.measure:SetFont(font, TEXT.letter, "OUTLINE")
-    for _, set in ipairs({ ns.LAYOUTS[ns.db.layout] or ns.LAYOUTS.letters, SYMBOLS }) do
+    for _, set in ipairs({ ns.LAYOUTS[ns.profile.layout] or ns.LAYOUTS.letters, SYMBOLS }) do
         for _, letters in ipairs(set) do
             kb.measure:SetText(ns.Upper(letters))
             widest = math.max(widest, kb.measure:GetStringWidth())
@@ -2110,7 +2111,7 @@ function ns.Relanguage()
 end
 
 function ns.Relayout()
-    if D.Built() then D.SetLayout(ns.db.layout) end
+    if D.Built() then D.SetLayout(ns.profile.layout) end
     ns.Restyle()
     if kb and box then
         S.flicks = ""
@@ -2193,7 +2194,7 @@ PlaceGuide = function()
     local chat = not kb.guideCorner and box and box.chatFrame
     kb.guideOverChat = chat and not chat:IsForbidden() or nil
     -- plus how far the player carried it (the settings' Button guide place)
-    local x, y = ns.db.guideX or 0, ns.db.guideY or 0
+    local x, y = ns.profile.guideX or 0, ns.profile.guideY or 0
     if kb.guideCorner then
         kb.guide:SetPoint("TOPLEFT", legend, "TOPLEFT", x, y)
         StepAside(legend, LEGEND_OWNER)
@@ -2434,7 +2435,7 @@ PlaceBy = function(edit)
     local left = x and x * edit:GetEffectiveScale() < UIParent:GetWidth() * UIParent:GetEffectiveScale() / 2
     -- Beside the chat line, plus how far the player carried it (kept in screen units, whatever its size).
     local scale = kb:GetScale()
-    local dx, dy = (ns.db.moveX or 0) / scale, (ns.db.moveY or 0) / scale
+    local dx, dy = (ns.profile.moveX or 0) / scale, (ns.profile.moveY or 0) / scale
     -- Stacked (tall): its bottom corner on the chat window's own, the messages' (the typing line is under them).
     local chat = ns.Stacked() and edit.chatFrame
     if chat then
@@ -2810,7 +2811,7 @@ local IM_FADED = 0.35
 
 local function FadeLine(edit)
     if edit:HasFocus() or GetCVar("chatStyle") ~= "im" then return end
-    edit:SetAlpha(ns.db.hideLine and 0 or IM_FADED)
+    edit:SetAlpha(ns.profile.hideLine and 0 or IM_FADED)
 end
 
 function ns.FadeLines()
@@ -2826,7 +2827,7 @@ local function Watch(edit)
             tostring(IsUsingGamepad()), Caller())) end
         -- A chat box still set with the keyboard hidden is a leftover (an open that did not finish): open anew.
         local function Try()
-            if ns.db.enabled and IsUsingGamepad() and edit:HasFocus() and (box ~= edit or not kb or not kb:IsShown()) then
+            if ns.profile.enabled and IsUsingGamepad() and edit:HasFocus() and (box ~= edit or not kb or not kb:IsShown()) then
                 Open(edit)
             end
         end
@@ -2845,7 +2846,7 @@ ns.Watch = Watch
 
 -- The controller picked up while a chat box has focus: the keyboard comes up then.
 function ns.PadActive(active)
-    if not active or not ns.db.enabled or (box and kb and kb:IsShown()) then return end
+    if not active or not ns.profile.enabled or (box and kb and kb:IsShown()) then return end
     local focus = GetCurrentKeyBoardFocus()
     if focus and edits[focus] then Open(focus) end
 end
@@ -2866,7 +2867,7 @@ function Fit.Seek()
         Fit.loose = nil
         if box == was then return ns.Shut() end
     end
-    if not ns.db.enabled or not IsUsingGamepad() then return end
+    if not ns.profile.enabled or not IsUsingGamepad() then return end
     if not focus or edits[focus] or focus == box or focus == ns.addressBox or focus:IsForbidden()
         or not focus:IsObjectType("EditBox") then return end
     -- A box whose text the game must never get from an addon (Direct.lua): typed into a box of ours over it,
@@ -2905,7 +2906,7 @@ function ns.Ready()
         local edit = _G["ChatFrame" .. i .. "EditBox"]
         if edit then Watch(edit) end
     end
-    if ns.db.hideLine then ns.FadeLines() end
+    if ns.profile.hideLine then ns.FadeLines() end
     -- A tab picked shows its own typing line faded again: after the game's pick, ours go out of sight once more.
     if FCFDock_SelectWindow then
         hooksecurefunc("FCFDock_SelectWindow", function() C_Timer.After(0, ns.FadeLines) end)

@@ -692,6 +692,66 @@ Is("phrases held back while A is down", #sent, count)
 Up("PAD1")
 Is("they send together on letting go", #sent, count + 1)
 
+-- profiles (GitHub issue #2; as WoW addons keep settings): each character on one, Default shared by all at first
+local toc = io.open(dir .. "/FlickChat.toc"):read("a")
+Has("the toc saves a table per character", toc, "## SavedVariablesPerCharacter: FlickChatCharDB")
+Is("the per character table is that one", ns.char ~= nil and ns.char == FlickChatCharDB, true)
+Is("a character starts on Default", ns.ProfileName(), "Default")
+Is("the settings are Default's", ns.profile == FlickChatDB.profiles.Default, true)
+Is("the account keeps no setting of its own", FlickChatDB.size == nil and FlickChatDB.phrases == nil, true)
+ns.SetPhrase(1, "for the horde")
+local size = ns.profile.size
+ns.NewProfile("  Thrall - Realm  ")
+Is("a new profile: this character is on it, by the name trimmed", ns.ProfileName(), "Thrall - Realm")
+Is("saved as this character's", FlickChatCharDB.profile, "Thrall - Realm")
+Is("it starts as a copy of the one it came from", ns.Phrase(1) == "for the horde" and ns.profile.size == size, true)
+Is("a copy, not the same tables", ns.profile.phrases ~= FlickChatDB.profiles.Default.phrases, true)
+Open()
+count = #sent
+Type("hello")
+Down("PAD1")
+Press("PAD3")
+Flick(1)
+Up("PAD1")
+Is("a phrase saved from the keyboard (A held, X, a flick) goes into this profile", (ns.Phrase(1) or ""):lower(), "hello")
+Is("Default keeps its own", FlickChatDB.profiles.Default.phrases[1], "for the horde")
+Is("saving sends nothing", #sent, count)
+ns.optionRows.size[2](size + 20)
+ns.NextProfile(1)
+Is("the next profile round from the last is Default", ns.ProfileName(), "Default")
+Is("on Default its phrase and size are back", ns.Phrase(1) == "for the horde" and ns.profile.size == size, true)
+Is("Default is no name kept for the character", FlickChatCharDB.profile, nil)
+ns.NextProfile(-1)
+Is("back the other way: Thrall's, its settings with it", ns.ProfileName() == "Thrall - Realm" and ns.profile.size == size + 20, true)
+ns.NewProfile("Default")
+Is("a new profile named as one already there turns to it", ns.ProfileName(), "Default")
+ns.UseProfile("Thrall - Realm")
+ns.CopyProfile("Default")
+Is("copy from: Default's settings into this profile", ns.Phrase(1) == "for the horde" and ns.profile.size == size, true)
+Is("still on this profile", ns.ProfileName(), "Thrall - Realm")
+ns.SetPhrase(1, "lok'tar")
+ns.ResetProfile()
+Is("a reset: every setting of this profile back to its default", ns.Phrase(1) == "hi" and ns.profile.size == 100, true)
+Is("Default untouched by it", FlickChatDB.profiles.Default.phrases[1], "for the horde")
+ns.DeleteProfile()
+Is("a delete: the profile gone and the character on Default",
+    FlickChatDB.profiles["Thrall - Realm"] == nil and ns.ProfileName() == "Default", true)
+ns.DeleteProfile()
+Is("Default stays", FlickChatDB.profiles.Default ~= nil and ns.ProfileName() == "Default", true)
+-- a character on a profile another deleted: on Default at its next load
+FlickChatCharDB.profile = "Gone"
+ns.UseProfile(FlickChatCharDB.profile, true)
+Is("a profile no longer there: Default", ns.ProfileName() == "Default" and FlickChatCharDB.profile == nil, true)
+ns.ResetPhrases()
+Is("a phrase reset clears this profile's phrases", next(ns.profile.phrases), nil)
+-- the settings of a save from before profiles: Default's at the first load of this version
+local older = { dbVersion = 2, size = 140, phrases = { "yo" }, shape = "above", learned = { hello = 3 }, arm = 0.5 }
+ns.Migrate(older)
+local moved = older.profiles and older.profiles.Default or {}
+Is("an older save: its settings are Default's", moved.size == 140 and moved.phrases[1] == "yo" and moved.shape == "above", true)
+Is("gone from the account, its learned words and stick reach kept",
+    older.size == nil and older.shape == nil and older.learned.hello == 3 and older.arm == 0.5, true)
+
 -- a box only passed through on a swing across is read as maybe not meant
 local words = table.concat(ns.Dict.Decode("321432", "<s>", 5), " "):lower()
 Has("the word finder drops a passed-through box", words, "heal")
@@ -764,46 +824,46 @@ Is("with the keyboard as the preview", kb.shown, true)
 local notice = _G.FlickChatNotice
 local wideW, wideH = kb.w, kb.h
 notice.scripts.OnGamePadButtonDown(notice, "PAD4")
-Is("Y in the window stacks the keyboard, the guess words on top", ns.db.shape, "above")
+Is("Y in the window stacks the keyboard, the guess words on top", ns.profile.shape, "above")
 Is("narrower and taller", kb.w < wideW and kb.h > wideH, true)
 local stackedW, stackedH = kb.w, kb.h
 notice.scripts.OnGamePadButtonDown(notice, "PAD4")
-Is("Y again puts the words below, the same size", ns.db.shape == "below" and kb.w == stackedW and kb.h == stackedH, true)
+Is("Y again puts the words below, the same size", ns.profile.shape == "below" and kb.w == stackedW and kb.h == stackedH, true)
 notice.scripts.OnGamePadButtonDown(notice, "PAD4")
-Is("and once more it is wide again, with no pick kept", ns.db.shape == nil and kb.w == wideW and kb.h == wideH, true)
+Is("and once more it is wide again, with no pick kept", ns.profile.shape == nil and kb.w == wideW and kb.h == wideH, true)
 -- the triggers step the keyboard's size, the bumpers under them its background, the d-pad's left and right the text
 notice.scripts.OnGamePadButtonDown(notice, "PADRTRIGGER")
-Is("RT in the window makes the keyboard larger", ns.db.size, 110)
+Is("RT in the window makes the keyboard larger", ns.profile.size, 110)
 notice.scripts.OnGamePadButtonDown(notice, "PADLTRIGGER")
-Is("LT takes it back", ns.db.size, 100)
-Is("a new player's background starts at 90", ns.db.backOpacity == 90 and kb.back.alpha == 0.9, true)
+Is("LT takes it back", ns.profile.size, 100)
+Is("a new player's background starts at 90", ns.profile.backOpacity == 90 and kb.back.alpha == 0.9, true)
 notice.scripts.OnGamePadButtonDown(notice, "PADLSHOULDER")
-Is("LB fades the keyboard's background from its 90 to 80", ns.db.backOpacity == 80 and kb.back.alpha == 0.8
+Is("LB fades the keyboard's background from its 90 to 80", ns.profile.backOpacity == 80 and kb.back.alpha == 0.8
     and kb.guide.back.alpha == 0.8, true)
 for _ = 1, 8 do notice.scripts.OnGamePadButtonDown(notice, "PADLSHOULDER") end
 Is("its border stays solid, even with no background", kb.TopEdge ~= nil and kb.TopEdge.alpha == nil
     and kb.TopEdge.shown ~= false and kb.guide.TopEdge.alpha == nil, true)
-Is("down to none it is gone", ns.db.backOpacity == 0 and not kb.back.shown, true)
+Is("down to none it is gone", ns.profile.backOpacity == 0 and not kb.back.shown, true)
 for _ = 1, 10 do notice.scripts.OnGamePadButtonDown(notice, "PADRSHOULDER") end
-Is("RB brings it back, up to full: solid, nothing seen through it", ns.db.backOpacity == 100 and kb.back.shown
+Is("RB brings it back, up to full: solid, nothing seen through it", ns.profile.backOpacity == 100 and kb.back.shown
     and kb.back.alpha == 1 and kb.back.color[4] == 1, true)
 local letter = kb.roses[1].cells[1].text
 local letterWas = letter.fontSize
 notice.scripts.OnGamePadButtonDown(notice, "PADDRIGHT")
-Is("d-pad right in the window makes the text larger", ns.db.textSize == 110 and letter.fontSize > letterWas, true)
-Is("the keyboard's size stays, its middle widens for the larger words", ns.db.size == 100 and kb.w > wideW, true)
+Is("d-pad right in the window makes the text larger", ns.profile.textSize == 110 and letter.fontSize > letterWas, true)
+Is("the keyboard's size stays, its middle widens for the larger words", ns.profile.size == 100 and kb.w > wideW, true)
 notice.scripts.OnGamePadButtonDown(notice, "PADDLEFT")
-Is("d-pad left takes it back", ns.db.textSize == 100 and letter.fontSize == letterWas and kb.w == wideW, true)
+Is("d-pad left takes it back", ns.profile.textSize == 100 and letter.fontSize == letterWas and kb.w == wideW, true)
 generic.Hide(_G.FlickChatNotice)
 Is("closing it puts the preview away", kb.shown, false)
 -- the preview under any other window, one with no way up of its own: it hangs there and nothing is asked of it
 local plain = Obj(UIParent)
 ns.PreviewKeyboard(plain)
 Is("the preview hangs under a plain window too", kb.shown, true)
-ns.db.shape = "above"
+ns.profile.shape = "above"
 ns.Restyle()
 Is("and takes a new shape there", kb.h > wideH, true)
-ns.db.shape = nil
+ns.profile.shape = nil
 ns.PreviewKeyboard()
 Is("and goes when asked", kb.shown, false)
 Is("and it is not shown twice", ns.db.welcomed, true)
@@ -825,35 +885,35 @@ SlashCmdList.FLICKCHAT("options")
 Is("/flick options opens them too", own.shown, true)
 -- the first row is the typing language: A turns to the next whose words are there, and round to the game's own
 own.scripts.OnGamePadButtonDown(own, "PAD1")
-Is("A on the first row turns to the next language", ns.db.language, "ptBR")
+Is("A on the first row turns to the next language", ns.profile.language, "ptBR")
 Is("the row names it", ns.LanguageName(), "Português")
 for _ = 2, #ns.LANGUAGES do own.scripts.OnGamePadButtonDown(own, "PAD1") end
-Is("round them all it follows the game's language again", ns.db.language, nil)
+Is("round them all it follows the game's language again", ns.profile.language, nil)
 -- the first box is under it
 own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
-local was = ns.db.lowercase
+local was = ns.profile.lowercase
 own.scripts.OnGamePadButtonDown(own, "PAD1")
-Is("A flips the first box", ns.db.lowercase == true, not was)
+Is("A flips the first box", ns.profile.lowercase == true, not was)
 own.scripts.OnGamePadButtonDown(own, "PAD1")
-local size = ns.db.size
+local size = ns.profile.size
 for _ = 1, 7 do own.scripts.OnGamePadButtonDown(own, "PADDDOWN") end
 own.scripts.OnGamePadButtonDown(own, "PADDRIGHT")
-Is("d-pad down to the size, right adds to it", ns.db.size, size + 5)
+Is("d-pad down to the size, right adds to it", ns.profile.size, size + 5)
 own.scripts.OnGamePadButtonDown(own, "PADDLEFT")
 -- the keyboard's background under the size, then the text's own size, each leaving the size as it is
 own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
 own.scripts.OnGamePadButtonDown(own, "PADDLEFT")
-Is("the background is the next row: left fades it", ns.db.backOpacity == 95 and kb.back.alpha == 0.95
-    and ns.db.size == size, true)
+Is("the background is the next row: left fades it", ns.profile.backOpacity == 95 and kb.back.alpha == 0.95
+    and ns.profile.size == size, true)
 own.scripts.OnGamePadButtonDown(own, "PADDRIGHT")
 own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
 own.scripts.OnGamePadButtonDown(own, "PADDRIGHT")
-Is("the text size is the row under it, apart from the keyboard's size", ns.db.textSize == 105 and ns.db.size == size, true)
+Is("the text size is the row under it, apart from the keyboard's size", ns.profile.textSize == 105 and ns.profile.size == size, true)
 own.scripts.OnGamePadButtonDown(own, "PADDLEFT")
 -- the shape under that; stacked, the word room row under it says why it changes nothing
 own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
 own.scripts.OnGamePadButtonDown(own, "PAD1")
-Is("A on the next row turns the keyboard's shape", ns.db.shape, "above")
+Is("A on the next row turns the keyboard's shape", ns.profile.shape, "above")
 Is("the row names it", ns.ShapeName(), "Words on top")
 own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
 Has("stacked, the word room row says it is the wide shape's", own.tip.text, "wide shape")
@@ -861,13 +921,71 @@ own.scripts.OnGamePadButtonDown(own, "PADDUP")
 own.scripts.OnGamePadButtonDown(own, "PAD1")
 Is("A again puts the words below", ns.ShapeName(), "Words below")
 own.scripts.OnGamePadButtonDown(own, "PAD1")
-Is("and once more it is wide", ns.db.shape, nil)
+Is("and once more it is wide", ns.profile.shape, nil)
 -- a shape this version does not know (a saved pick from another build) is the wide one
-ns.db.shape = "stacked"
+ns.profile.shape = "stacked"
 Is("an unknown saved shape reads as wide", ns.ShapeName(), "Wide")
-ns.db.shape = nil
+ns.profile.shape = nil
 own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
 Is("wide, that row has nothing to add", own.tip.text, "")
+-- the last section: this character's profile, a new one, copy from, reset, delete (the last three: A twice)
+local function Showing(text)
+    for _, f in ipairs(frames) do
+        if f.value and f.value.text == text then return true end
+    end
+    return false
+end
+local realUnitName = UnitName
+UnitName = function(unit) if unit == "player" then return "Zaffa" end return realUnitName(unit) end
+GetRealmName = function() return "Argent Dawn" end
+local function Pad(button) own.scripts.OnGamePadButtonDown(own, button) end
+for _ = 1, 10 do Pad("PADRSHOULDER") end
+for _ = 1, 4 do Pad("PADDUP") end
+Has("four rows over the last is this character's profile", own.tip.text, "belong to a profile")
+Is("it shows Default", Showing("Default"), true)
+Pad("PADDDOWN")
+Pad("PAD1")
+local nameBox
+for _, f in ipairs(frames) do
+    if f.slot == "profile" and f.shown then nameBox = f end
+end
+Is("A on New profile: a box with the character and realm in it", nameBox and nameBox.text, "Zaffa - Argent Dawn")
+nameBox.text = "Raid"
+nameBox.scripts.OnEnterPressed(nameBox)
+Is("Enter there: the new profile, this character on it", ns.ProfileName(), "Raid")
+Pad("PADDUP")
+Is("the profile row names it", Showing("Raid"), true)
+Pad("PADDLEFT")
+Is("left: the profile before it, Default", ns.ProfileName(), "Default")
+Pad("PADDRIGHT")
+Is("right: Raid again", ns.ProfileName(), "Raid")
+ns.SetPhrase(1, "pull in 5")
+Pad("PADDDOWN")
+Pad("PADDDOWN")
+Has("then copy from", own.tip.text, "copies all its settings")
+Is("it offers the other profile", Showing("Default"), true)
+Pad("PAD1")
+Is("one A only asks again", ns.Phrase(1) == "pull in 5" and Showing("[PAD1] again to confirm"), true)
+Pad("PAD1")
+Is("the second copies Default in", ns.Phrase(1), "hi")
+ns.SetPhrase(1, "pull in 5")
+Pad("PADDDOWN")
+Pad("PAD1")
+Pad("PADDDOWN")
+Pad("PADDUP")
+Pad("PAD1")
+Is("moving off the reset asks from the start", ns.Phrase(1), "pull in 5")
+Pad("PAD1")
+Is("then A twice resets the profile", ns.Phrase(1), "hi")
+Pad("PADDDOWN")
+Pad("PAD1")
+Pad("PAD1")
+Is("A twice on delete: Raid gone, this character on Default",
+    FlickChatDB.profiles.Raid == nil and ns.ProfileName() == "Default", true)
+Is("on Default the delete row says it stays", Showing("Default stays"), true)
+Pad("PAD1")
+Is("and A there deletes nothing", FlickChatDB.profiles.Default ~= nil, true)
+UnitName, GetRealmName = realUnitName, nil
 own.scripts.OnGamePadButtonDown(own, "PAD2")
 Is("B shuts it", own.shown, false)
 
@@ -992,7 +1110,7 @@ local function Version(path)
 end
 local ACCENTED = { enUS = "hello", ptBR = "não", frFR = "où", deDE = "für", itIT = "più", esES = "también", ruRU = "ещё" }
 for _, code in ipairs(ns.LANGUAGES) do
-    ns.db.language, ns.db.wordsOf, ns.db.others = code, code, {}
+    ns.profile.language, ns.db.wordsOf, ns.db.others = code, code, {}
     ns.db.learned, ns.db.pairs, ns.db.forms, ns.db.forgot = {}, {}, {}, {}
     Open()
     Is(code .. ": its words are the keyboard's", D.Code(), code)
@@ -1036,7 +1154,7 @@ Is("every Russian capital has a lowercase", ns.Lower(russianUpper), russianLower
 Is("every Russian letter has a capital", ns.Upper(russianLower), russianUpper)
 Is("mixed Latin and Cyrillic case is kept", ns.Lower("ЁЖ Hello ÉTÉ"), "ёж hello été")
 Is("Russian title case changes one whole letter", ns.Capital("ёлка"), "Ёлка")
-ns.db.language = "ruRU"
+ns.profile.language = "ruRU"
 Open()
 Is("Russian uses Cyrillic letter groups", ns.LAYOUTS.letters[1], "абвг")
 -- drawn in the game's Cyrillic font: an English game's standard font has no Russian letters (they show as boxes)
@@ -1087,14 +1205,14 @@ for _ = 1, 21 do Flick(8) end
 Is("unknown flicks fall back to whole Cyrillic letters", T.Word(), string.rep("ы", 21))
 Press("PADBACK")
 Press("PAD2")
-ns.db.layout = "vowels"
+ns.profile.layout = "vowels"
 Open()
 Type("спасибо")
 Press("PAD1")
 Is("Russian predictions work on the vowels layout", sent[#sent], "Спасибо")
 Is("Russian vowels are on the left stick", ns.LAYOUTS.vowels[4], "ыэюя")
 Press("PAD2")
-ns.db.layout = "letters"
+ns.profile.layout = "letters"
 ns.PracticeNext()
 Open()
 Is("typing practice opens with Cyrillic words", ns.practice ~= nil, true)
@@ -1131,7 +1249,7 @@ Press("PADBACK")
 Press("PAD2")
 ns.db.lessonDone = true
 local learnedRussian = ns.db.learned["привет"]
-ns.db.language = "enUS"
+ns.profile.language = "enUS"
 Open()
 Is("switching back restores the Latin layout", ns.LAYOUTS.letters[1], "abc")
 Is("and the game's standard font", kb.roses[1].cells[1].text.fontPath, STANDARD_TEXT_FONT)
@@ -1140,7 +1258,7 @@ Type("hello")
 Press("PAD1")
 Is("a cached English dictionary restores its letter map", sent[#sent], "Hello")
 Open()
-ns.db.language = "ruRU"
+ns.profile.language = "ruRU"
 ns.Relanguage()
 Is("switching an open keyboard restores Cyrillic groups", ns.LAYOUTS.letters[1], "абвг")
 Is("and the Cyrillic font, the lesson lines' too", kb.roses[1].cells[1].text.fontPath == cyrillicFont
@@ -1150,7 +1268,7 @@ Type("привет")
 Press("PAD1")
 Is("a cached Russian dictionary restores its letter map", sent[#sent], "Привет")
 Press("PAD2")
-ns.locale, ns.db.language = "ruRU", nil
+ns.locale, ns.profile.language = "ruRU", nil
 Is("a Russian game automatically selects Russian", ns.WantedLanguage(), "ruRU")
 Is("a Russian game shows translated settings", ns.L.OPT_LANGUAGE, "Язык ввода")
 Is("a Russian game has Russian quick phrases", ns.Phrase(1), "привет")
@@ -1169,7 +1287,7 @@ ns.locale = "enUS"
 local lines = {}
 local printWas = print
 print = function(text) lines[#lines + 1] = text end
-ns.LANGUAGE_NAMES.xxXX, ns.db.language = "Test", "xxXX"
+ns.LANGUAGE_NAMES.xxXX, ns.profile.language = "Test", "xxXX"
 Open()
 Press("PAD2")
 Open()
@@ -1177,27 +1295,27 @@ Press("PAD2")
 print = printWas
 Is("a language with no folder types English", D.Code(), "enUS")
 Is("and says so once", #lines, 1)
-ns.LANGUAGE_NAMES.xxXX, ns.db.language = nil, nil
+ns.LANGUAGE_NAMES.xxXX, ns.profile.language = nil, nil
 -- each language keeps what it learned: another's turn puts these aside, and its own turn brings them back
 ns.db.learned.zug = 3
-ns.db.language = "ptBR"
+ns.profile.language = "ptBR"
 Open()
 Is("another language starts with nothing learned", next(ns.db.learned), nil)
 Is("the first one's learned words wait", ns.db.others.enUS.learned.zug, 3)
 Press("PAD2")
-ns.db.language = nil
+ns.profile.language = nil
 Open()
 Is("and come back with its turn", ns.db.learned.zug, 3)
 Press("PAD2")
 ns.db.learned.zug = nil
 -- the other letter layout on another language's words
-ns.db.language, ns.db.layout = "frFR", "vowels"
+ns.profile.language, ns.profile.layout = "frFR", "vowels"
 Open()
 Type("merci")
 Press("PAD1")
 Is("a French word on the vowels layout", sent[#sent], "Merci")
 Press("PAD2")
-ns.db.language, ns.db.layout = nil, "letters"
+ns.profile.language, ns.profile.layout = nil, "letters"
 -- by a chat window: stacked, the keyboard's bottom corner on the chat window's own (the messages', not the typing
 -- line under them); wide, by the typing line as before
 local chatWindow = Obj(UIParent)
@@ -1206,12 +1324,12 @@ chatBox.chatFrame = chatWindow
 local placed
 kb.SetPoint = function(_, ...) placed = { ... } end
 for _, shape in ipairs({ "above", "below" }) do
-    ns.db.shape = shape
+    ns.profile.shape = shape
     T.PlaceBy(chatBox)
     Is("words " .. shape .. ": the keyboard's bottom left on the chat window's bottom right", placed[1] == "BOTTOMLEFT"
-        and placed[2] == chatWindow and placed[3] == "BOTTOMRIGHT" and placed[5] == (ns.db.moveY or 0), true)
+        and placed[2] == chatWindow and placed[3] == "BOTTOMRIGHT" and placed[5] == (ns.profile.moveY or 0), true)
 end
-ns.db.shape = nil
+ns.profile.shape = nil
 T.PlaceBy(chatBox)
 Is("wide: by the typing line as before", placed[1] == "BOTTOMLEFT" and placed[2] == chatBox and placed[3] == "TOPRIGHT", true)
 kb.SetPoint = nil
@@ -1240,25 +1358,25 @@ ns.MoveNext(nil, true)
 Open()
 local guideTick = lastTick
 Has("the line says the left stick moves the button guide", kb.hint.text, "button guide")
-kb.guide.GetLeft = function() return ns.db.guideX or 0 end
-local kbX, kbSize = ns.db.moveX, ns.db.size
+kb.guide.GetLeft = function() return ns.profile.guideX or 0 end
+local kbX, kbSize = ns.profile.moveX, ns.profile.size
 kb.scripts.OnGamePadStick(kb, "Left", 1, 0, 1)
 kb.scripts.OnGamePadStick(kb, "Right", 0, 1, 1)
 now = now + 0.05
 guideTick()
-Is("the left stick carries the guide", (ns.db.guideX or 0) > 0 and guidePlaced[4] == ns.db.guideX, true)
-Is("and leaves the keyboard's place and size", ns.db.moveX == kbX and ns.db.size == kbSize, true)
+Is("the left stick carries the guide", (ns.profile.guideX or 0) > 0 and guidePlaced[4] == ns.profile.guideX, true)
+Is("and leaves the keyboard's place and size", ns.profile.moveX == kbX and ns.profile.size == kbSize, true)
 kb.scripts.OnGamePadStick(kb, "Left", 0, 0, 0)
 kb.scripts.OnGamePadStick(kb, "Right", 0, 0, 0)
 Press("PAD2")
-Is("B puts it back", ns.db.guideX, 0)
+Is("B puts it back", ns.profile.guideX, 0)
 Press("PAD2")
 kb.guide.GetLeft, kb.guide.SetPoint = nil, nil
-ns.db.guideX, ns.db.guideY = nil, nil
+ns.profile.guideX, ns.profile.guideY = nil, nil
 padUI = true
 -- the stacked shapes type as the wide one does (the letters layout back first: the lines above left the other on)
 for _, shape in ipairs({ "above", "below" }) do
-    ns.db.shape = shape
+    ns.profile.shape = shape
     ns.Relayout()
     Open()
     Type("hello")
@@ -1266,14 +1384,14 @@ for _, shape in ipairs({ "above", "below" }) do
     Is("typing is the same with the words " .. shape, sent[#sent], "Hello")
     Press("PAD2")
 end
-ns.db.shape = nil
+ns.profile.shape = nil
 ns.Restyle()
 -- a Latin American Spanish game types with Spanish's words, and Spanish there is the game's own, no pick
 ns.locale = "esMX"
 Is("a Latin American Spanish game types Spanish", ns.WantedLanguage(), "esES")
-ns.db.language = "itIT"
+ns.profile.language = "itIT"
 ns.NextLanguage()
-Is("where Spanish is followed, not picked", ns.db.language, nil)
+Is("where Spanish is followed, not picked", ns.profile.language, nil)
 -- saved settings from before Spanish had a list, on a Spanish game: what was learned is Spanish's
 local old = { dbVersion = 1, languagesTold = true, wordsOf = "enUS" }
 ns.Migrate(old)

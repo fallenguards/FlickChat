@@ -6,6 +6,8 @@ Open chat from the game's controller menu and the keyboard comes with it. A shor
 
 While you type, hold View and push the right stick to scroll the chat, and press LT and RT together for a slash. The wheel's Channels page joins and leaves channels too, such as General and Trade.
 
+Hold A and flick to say a quick phrase, and save your own over them. The settings have profiles: a character can have its own, for roleplay phrases or a different keyboard size, or share one with others.
+
 Keyboard shape in the settings stacks the guessed words with the letters, on top or below, for a narrower keyboard.
 
 It guesses words in English, Spanish, Portuguese, French, German, Italian and Russian. It follows your game's language, and Typing language in the settings picks another.
