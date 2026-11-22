@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.9.0] - 2026-11-22
+
+### Added
+- Profiles: a character can keep its own settings, such as its quick phrases or keyboard size, or share them with other characters. Every character starts on Default, which keeps the settings you have now. Profiles are at the end of the settings: This character's profile turns to another, with New profile, Copy from, Reset profile and Delete profile below it. Learned words stay shared by all characters. Requested on GitHub.
+- A Battle.net page on the wheel, after Whispers, for Battle.net whispers: your Battle.net friends, those offline too, after those online and in gray as the friends list shows them. Its Find a name searches them all. Requested on GitHub.
+- Change chat tabs without the game's controller interface too: hold View and press LB or RB, as in the controller interface. The View and bumper icons beside the tabs show how, and the keyboard stays open on the new tab.
+
+### Changed
+- Holding A now opens the quick phrases page, and it stays after you let go of A, so both sticks are free. Hold A again to go back to letters, with what you typed kept. A flick while A is still held says that phrase as before.
+- The Whispers page now whispers characters: your target, the people you whispered last, your friends and the characters your Battle.net friends play here.
+
+### Fixed
+- Friends added for Forever only can be whispered from the wheel. Before, it sent them a Battle.net whisper, which does not reach them.
+- The Whispers page no longer leaves out the others you whispered when the last one was your target.
+- A controller cursor now walks the rows of FlickChat's settings in the game's Options without the game's controller interface too, stopping on each row and its buttons.
+- In FlickChat's settings, a mouse pointer resting over the list no longer takes the d-pad's place as the rows scroll under it.
+
 ## [1.8.0] - 2026-11-20
 
 ### Added
