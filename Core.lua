@@ -1071,7 +1071,7 @@ end
 local function Named(key) return _G["CHAT_MSG_" .. key] or key end
 
 -- How likely each kind of person is the one meant, for the name search and the whispers page.
-local RECENT, CLOSE_BY, FRIEND, GUILDIE = 0.5, 0.4, 0.3, 0.1
+local RECENT, CLOSE_BY, FRIEND, GUILDIE, OFFLINE = 0.5, 0.4, 0.3, 0.1, 0.05
 
 -- A friend in this game only (Battle.net's third friend level, after BattleTag and Real ID) no Battle.net whisper
 -- reaches: the game whispers their character instead, and so does the wheel.
@@ -1107,8 +1107,9 @@ end
 
 -- The channel wheel's pages, eight slices each from the top going clockwise: where to talk; who to whisper (the
 -- target, the newest whisper partners, friends online and the characters Battle.net friends play here, then a name
--- search); the same by Battle.net (only while a Battle.net friend is online); the numbered channels and the zone's
--- ones to join. A slice the player cannot use now stays in its place, marked off.
+-- search); the same by Battle.net, friends online first, then those offline (a Battle.net whisper reaches them too;
+-- the page is there while the player has a Battle.net friend); the numbered channels and the zone's ones to join. A
+-- slice the player cannot use now stays in its place, marked off.
 function ns.WheelPages()
     local L = ns.L
     local instance, guild = IsInGroup(LE_PARTY_CATEGORY_INSTANCE), IsInGuild()
@@ -1151,12 +1152,22 @@ function ns.WheelPages()
         end
         name, kind = ChatFrameUtil.GetNextTellTarget(name, kind)
     end
-    local online = false
+    local anyBnet, offline = false, {}
     for _, friend in ipairs(ns.WhisperNames()) do
         local byBnet = friend.chatType == "BN_WHISPER"
-        online = online or byBnet
-        if friend.chance >= FRIEND then Keep(byBnet and bnet or people, friend.label, friend.chatType, friend.tellTarget) end
+        anyBnet = anyBnet or byBnet
+        if friend.offline then
+            offline[#offline + 1] = friend
+        elseif friend.chance >= FRIEND then
+            Keep(byBnet and bnet or people, friend.label, friend.chatType, friend.tellTarget)
+        end
     end
+    -- Battle.net friends offline after those online: favourites first, then the most lately online
+    table.sort(offline, function(a, b)
+        if a.favorite ~= b.favorite then return a.favorite end
+        return a.lastOnline > b.lastOnline
+    end)
+    for _, friend in ipairs(offline) do Keep(bnet, friend.label, friend.chatType, friend.tellTarget) end
     people[#people + 1] = { label = L["WHISPER_SOMEONE"], naming = "WHISPER" }
     bnet[#bnet + 1] = { label = L["WHISPER_SOMEONE"], naming = "BN_WHISPER" }
     local channels, list = {}, { GetChannelList() }
@@ -1175,16 +1186,17 @@ function ns.WheelPages()
     -- The addon's own page: its settings window, and the keyboard's place.
     local own = { { label = L["SETTINGS_SLICE"], settings = true }, { label = L["MOVE_SLICE"], move = true } }
     local pages = { { title = L["WHEEL_TALK"], picks = talk }, { title = L["WHEEL_WHISPERS"], picks = people } }
-    if online then pages[#pages + 1] = { title = L["WHEEL_BNET"], picks = bnet } end
+    if anyBnet then pages[#pages + 1] = { title = L["WHEEL_BNET"], picks = bnet } end
     pages[#pages + 1] = { title = L["WHEEL_CHANNELS"], picks = channels }
     pages[#pages + 1] = { title = L["TITLE"], picks = own }
     return pages
 end
 
 -- Everyone a whisper can reach now, for the name search: Battle.net friends by BattleTag and by the character they
--- play (a Battle.net whisper; none for a friend in this game only), the characters Battle.net friends play here
--- (a whisper to the character), WoW friends, the guild, the group, the target; the newest whisper partners count
--- most. Given a kind ("WHISPER" or "BN_WHISPER"), only the whispers of that kind.
+-- play (a Battle.net whisper; none for a friend in this game only), those offline by BattleTag too (the game's
+-- friends list whispers any Battle.net friend; they count least), the characters Battle.net friends play here (a
+-- whisper to the character), WoW friends, the guild, the group, the target; the newest whisper partners count most.
+-- Given a kind ("WHISPER" or "BN_WHISPER"), only the whispers of that kind.
 function ns.WhisperNames(only)
     local list, seen, recent = {}, {}, {}
     local name, kind = ChatFrameUtil.GetLastTellTarget()
@@ -1201,17 +1213,25 @@ function ns.WhisperNames(only)
         local key = ns.Lower(label) .. "\0" .. target
         if seen[key] then return end
         seen[key] = true
-        list[#list + 1] = { label = label, chatType = chatType, tellTarget = target,
+        local entry = { label = label, chatType = chatType, tellTarget = target,
             chance = math.max(chance, recent[target] or 0) }
+        list[#list + 1] = entry
+        return entry
     end
     for i = 1, BNGetNumFriends and BNGetNumFriends() or 0 do
         local info = C_BattleNet.GetFriendAccountInfo(i)
         local game = info and info.gameAccountInfo
-        if game and game.isOnline then
-            if not (TITLE and info.friendLevel == TITLE) then
-                Add(info.battleTag and info.battleTag:match("^[^#]+"), "BN_WHISPER", info.accountName, FRIEND)
-                Add(game.characterName, "BN_WHISPER", info.accountName, FRIEND)
+        local online = game and game.isOnline
+        if info and not (TITLE and info.friendLevel == TITLE) then
+            local entry = Add(info.battleTag and info.battleTag:match("^[^#]+"), "BN_WHISPER", info.accountName,
+                online and FRIEND or OFFLINE)
+            if entry and not online then
+                entry.offline, entry.favorite = true, info.isFavorite == true
+                entry.lastOnline = type(info.lastOnlineTime) == "number" and info.lastOnlineTime or 0
             end
+            if online then Add(game.characterName, "BN_WHISPER", info.accountName, FRIEND) end
+        end
+        if online then
             local character = CharacterOf(info)
             if character then
                 local label = type(game.characterName) == "string" and game.characterName ~= "" and game.characterName

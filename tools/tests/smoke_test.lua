@@ -78,6 +78,13 @@ local bnetFriends = {
     { bnetAccountID = 2, battleTag = "Legolas#5678", accountName = "|Kq2|k", friendLevel = 3,
         gameAccountInfo = { isOnline = true, characterName = "Greenleaf", realmName = "Mirkwood", clientProgram = "WoW",
             wowProjectID = 99, isInCurrentRegion = true } },
+    -- offline: a Battle.net whisper reaches them still (the game's friends list whispers any Battle.net friend)
+    { bnetAccountID = 3, battleTag = "Gimli#4321", accountName = "|Kq3|k", friendLevel = 1, lastOnlineTime = 100,
+        gameAccountInfo = { isOnline = false } },
+    { bnetAccountID = 4, battleTag = "Boromir#2468", accountName = "|Kq4|k", friendLevel = 1, lastOnlineTime = 200,
+        gameAccountInfo = { isOnline = false } },
+    { bnetAccountID = 5, battleTag = "Frodo#1357", accountName = "|Kq5|k", friendLevel = 1, lastOnlineTime = 50,
+        isFavorite = true, gameAccountInfo = { isOnline = false } },
 }
 function BNGetNumFriends() return #bnetFriends end
 C_BattleNet = { GetFriendAccountInfo = function(i) return bnetFriends[i] end,
@@ -563,9 +570,27 @@ Is("not on the Battle.net page", Slice(pages[3].picks, "|Kq2|k") == nil, true)
 tells[1] = "Varian"
 Is("the target whispered last leaves the other partners listed", Slice(ns.WheelPages()[2].picks, "Thrall") ~= nil, true)
 tells[1], tellKinds["|Kq2|k"] = "Jaina", nil
--- no Battle.net friend online (a friend in this game only is no Battle.net whisper's): no Battle.net page
+-- Battle.net friends offline: on the Battle.net page after those online, favourites first, then the most lately
+-- online (2026-11-22: "you can send messages to people even while they're offline... ofc prio online ppl")
+local order = {}
+for _, pick in ipairs(ns.WheelPages()[3].picks) do order[#order + 1] = pick.label end
+Is("online first, then offline: favourites, then the most lately online", table.concat(order, ","),
+    "Aragorn,Frodo,Boromir,Gimli,Find a name")
+local offlineFound = false
+for _, name in ipairs(ns.WhisperNames("BN_WHISPER")) do offlineFound = offlineFound or name.label == "Gimli" end
+Is("the Battle.net search finds a friend offline", offlineFound, true)
+kinds = {}
+for _, name in ipairs(ns.WhisperNames("WHISPER")) do kinds[name.label] = true end
+Is("no whisper to a character for a friend offline", kinds.Gimli, nil)
 bnetFriends[1].gameAccountInfo.isOnline = false
-Is("no Battle.net friend online: no Battle.net page", Titles(), "Talk,Whispers,Channels,FlickChat")
+Is("every Battle.net friend offline: the page stays", Titles(), "Talk,Whispers,Battle.net,Channels,FlickChat")
+-- no Battle.net friend at all but one in this game only (no Battle.net whisper's): no Battle.net page
+local kept = { table.unpack(bnetFriends) }
+for i = #bnetFriends, 1, -1 do
+    if bnetFriends[i].friendLevel ~= 3 then table.remove(bnetFriends, i) end
+end
+Is("only a friend in this game only: no Battle.net page", Titles(), "Talk,Whispers,Channels,FlickChat")
+for i, friend in ipairs(kept) do bnetFriends[i] = friend end
 bnetFriends[1].gameAccountInfo.isOnline = true
 
 -- LT held erases word by word, from its press and release (the game's controller interface)
