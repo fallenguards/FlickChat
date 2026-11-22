@@ -131,6 +131,7 @@ ns.EN = {
     PROBE_CHAT = "recording chat focus for 30 seconds: open chat your usual way now. /reload afterwards saves it.",
     WHEEL_TALK = "Talk",
     WHEEL_WHISPERS = "Whispers",
+    WHEEL_BNET = "Battle.net",
     WHEEL_CHANNELS = "Channels",
     HINT_WHEEL = "Point a stick at where to type, then let it go. LB and RB turn the page; %s or %s closes.",
     WHEEL_LETGO = "%s: let go of the stick to type there.",

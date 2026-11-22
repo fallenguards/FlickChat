@@ -67,9 +67,21 @@ function IsControlKeyDown() return false end
 function IsAltKeyDown() return false end
 C_FriendList = { GetNumFriends = function() return 1 end,
     GetFriendInfoByIndex = function() return { name = "Arnold-Realm", connected = true } end }
-function BNGetNumFriends() return 1 end
-C_BattleNet = { GetFriendAccountInfo = function() return { battleTag = "Aragorn#1234", accountName = "|Kq1|k",
-    gameAccountInfo = { isOnline = true, characterName = "Strider" } } end }
+-- Battle.net friends online: one by BattleTag, playing a character here; one a friend in this game only, whom the
+-- game whispers by character (its own target for them)
+BNET_CLIENT_WOW, WOW_PROJECT_ID = "WoW", 99
+Enum.BattleNetFriendLevel = { BattleTag = 1, RealID = 2, Title = 3 }
+local bnetFriends = {
+    { bnetAccountID = 1, battleTag = "Aragorn#1234", accountName = "|Kq1|k", friendLevel = 1,
+        gameAccountInfo = { isOnline = true, characterName = "Strider", realmName = "Rivendell", clientProgram = "WoW",
+            wowProjectID = 99, isInCurrentRegion = true } },
+    { bnetAccountID = 2, battleTag = "Legolas#5678", accountName = "|Kq2|k", friendLevel = 3,
+        gameAccountInfo = { isOnline = true, characterName = "Greenleaf", realmName = "Mirkwood", clientProgram = "WoW",
+            wowProjectID = 99, isInCurrentRegion = true } },
+}
+function BNGetNumFriends() return #bnetFriends end
+C_BattleNet = { GetFriendAccountInfo = function(i) return bnetFriends[i] end,
+    GetDefaultTitleWhisperTarget = function(id) return id == 2 and "Greenleaf-Mirkwood" or nil end }
 LE_PARTY_CATEGORY_INSTANCE = 2
 function IsInGroup() return false end
 function UnitIsPlayer(u) return u == "target" end
@@ -83,11 +95,19 @@ function EnumerateServerChannels() return "General", "Trade", "LookingForGroup",
 local channelsLeft = {}
 function LeaveChannelByName(name) channelsLeft[#channelsLeft + 1] = name end
 CHAT_MSG_SAY, CHAT_MSG_PARTY, CHAT_MSG_GUILD, CHAT_MSG_RAID = "Say", "Party", "Guild", "Raid"
-local tells = { "Jaina", "Thrall" }
+local tells, tellKinds = { "Jaina", "Thrall" }, {}
 ChatFrameUtil = {
-    GetLastTellTarget = function() return tells[1], "WHISPER" end,
+    GetLastTellTarget = function() return tells[1], tells[1] and (tellKinds[tells[1]] or "WHISPER") end,
     GetNextTellTarget = function(name)
-        for i, t in ipairs(tells) do if t == name then return tells[i + 1], tells[i + 1] and "WHISPER" end end
+        for i, t in ipairs(tells) do
+            if t == name then return tells[i + 1], tells[i + 1] and (tellKinds[tells[i + 1]] or "WHISPER") end
+        end
+    end,
+    -- the game's: the character it whispers for a Battle.net name that is a friend in this game only
+    GetCharacterWhisperTargetIfTitleFriend = function(name)
+        for _, friend in ipairs(bnetFriends) do
+            if friend.accountName == name then return C_BattleNet.GetDefaultTitleWhisperTarget(friend.bnetAccountID) end
+        end
     end,
 }
 
@@ -367,7 +387,7 @@ Press("PAD2")
 -- a zone channel not joined: the Channels page offers it; letting go asks on the wheel, A runs the game's own
 -- /join, and the line types there once the game has numbered the channel
 local function WheelTo(title)
-    for _ = 1, 4 do
+    for _ = 1, 6 do
         local w = T.state.wheel
         if w.pages[w.page].title == title then return w.pages[w.page].picks end
         Press("PADRSHOULDER")
@@ -472,6 +492,81 @@ Is("the stick still out as the wheel went types nothing", box.text, held)
 Flick(1)
 Is("once back at rest it types again", box.text ~= held, true)
 Press("PAD2")
+
+-- whispers to a character on one page, Battle.net whispers on the next (2026-11-22, asked on GitHub: a friend in
+-- this game only is no Battle.net whisper's to reach, and the game whispers their character instead)
+local function Slice(picks, label)
+    for i, pick in ipairs(picks) do if pick.label == label then return i, pick end end
+end
+local function Titles()
+    local out = {}
+    for i, page in ipairs(ns.WheelPages()) do out[i] = page.title end
+    return table.concat(out, ",")
+end
+Is("a Battle.net page after the Whispers page", Titles(), "Talk,Whispers,Battle.net,Channels,FlickChat")
+local pages = ns.WheelPages()
+local whispers, bnetPage = pages[2].picks, pages[3].picks
+local _, strider = Slice(whispers, "Strider")
+Is("a Battle.net friend's character here is on the Whispers page", strider and strider.tellTarget, "Strider-Rivendell")
+Is("as a whisper to the character", strider and strider.chatType, "WHISPER")
+local _, greenleaf = Slice(whispers, "Greenleaf")
+Is("a friend in this game only: the character the game whispers", greenleaf and greenleaf.tellTarget,
+    "Greenleaf-Mirkwood")
+local bnetOnWhispers = false
+for _, pick in ipairs(whispers) do bnetOnWhispers = bnetOnWhispers or pick.chatType == "BN_WHISPER" end
+Is("no Battle.net whisper on the Whispers page", bnetOnWhispers, false)
+local _, aragorn = Slice(bnetPage, "Aragorn")
+Is("the Battle.net page whispers the friend by Battle.net", aragorn and (aragorn.chatType .. " " .. aragorn.tellTarget),
+    "BN_WHISPER |Kq1|k")
+Is("never a friend in this game only", Slice(bnetPage, "Legolas") == nil and Slice(bnetPage, "Greenleaf") == nil, true)
+Is("each page's search keeps to its kind", bnetPage[#bnetPage].naming .. " " .. whispers[#whispers].naming,
+    "BN_WHISPER WHISPER")
+local kinds = {}
+for _, name in ipairs(ns.WhisperNames("BN_WHISPER")) do kinds[name.chatType] = true end
+Is("the Battle.net search finds Battle.net whispers alone", kinds.BN_WHISPER and not kinds.WHISPER, true)
+kinds = {}
+for _, name in ipairs(ns.WhisperNames("WHISPER")) do kinds[name.chatType] = true end
+Is("the character search finds whispers to characters alone", kinds.WHISPER and not kinds.BN_WHISPER, true)
+-- the wheel: letting go on a slice sets the line's whisper
+local function WheelSlice(i)
+    local angle = math.rad(90 - (i - 1) * 45)
+    WheelFlick(math.cos(angle), math.sin(angle))
+end
+Open()
+Press("PAD4")
+WheelSlice(Slice(WheelTo("Battle.net"), "Aragorn"))
+Is("Aragorn on the Battle.net page: a Battle.net whisper", box.attr.chatType .. " " .. tostring(box.attr.tellTarget),
+    "BN_WHISPER |Kq1|k")
+Press("PAD4")
+Is("the wheel opens on the page of the whisper typed to", T.state.wheel.pages[T.state.wheel.page].title, "Battle.net")
+WheelSlice(Slice(WheelTo("Whispers"), "Strider"))
+Is("Strider on the Whispers page: a whisper to the character",
+    box.attr.chatType .. " " .. tostring(box.attr.tellTarget), "WHISPER Strider-Rivendell")
+Press("PAD4")
+local bnetPicks = WheelTo("Battle.net")
+WheelSlice(#bnetPicks)
+local searched = T.state.naming and T.state.naming.names or {}
+kinds = {}
+for _, name in ipairs(searched) do kinds[name.chatType] = true end
+Is("the Battle.net page's search lists Battle.net friends alone", #searched > 0 and not kinds.WHISPER, true)
+Press("PAD2")
+Press("PAD2")
+box.attr.chatType, box.attr.tellTarget = "SAY", nil
+-- a friend in this game only, whispered last by Battle.net: on the Whispers page by character
+tells[1], tellKinds["|Kq2|k"] = "|Kq2|k", "BN_WHISPER"
+pages = ns.WheelPages()
+local _, back = Slice(pages[2].picks, "Greenleaf")
+Is("a friend in this game only whispered last: by character", back and (back.chatType .. " " .. back.tellTarget),
+    "WHISPER Greenleaf-Mirkwood")
+Is("not on the Battle.net page", Slice(pages[3].picks, "|Kq2|k") == nil, true)
+-- the target whispered last: the partners before them still listed
+tells[1] = "Varian"
+Is("the target whispered last leaves the other partners listed", Slice(ns.WheelPages()[2].picks, "Thrall") ~= nil, true)
+tells[1], tellKinds["|Kq2|k"] = "Jaina", nil
+-- no Battle.net friend online (a friend in this game only is no Battle.net whisper's): no Battle.net page
+bnetFriends[1].gameAccountInfo.isOnline = false
+Is("no Battle.net friend online: no Battle.net page", Titles(), "Talk,Whispers,Channels,FlickChat")
+bnetFriends[1].gameAccountInfo.isOnline = true
 
 -- LT held erases word by word, from its press and release (the game's controller interface)
 Open()

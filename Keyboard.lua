@@ -356,7 +356,8 @@ local function SwitchTo(pick, digit)
     if not pick then return end
     if pick.move then return ns.StartMove() end
     if pick.naming then
-        local names = ns.WhisperNames()
+        -- the page's kind of whisper: characters on one, Battle.net friends on the other
+        local names = ns.WhisperNames(pick.naming)
         S.naming = { flicks = "", names = names, found = D.MatchNames(names, "") }
         return Paint()
     end

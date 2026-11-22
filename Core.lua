@@ -1073,8 +1073,41 @@ local function Named(key) return _G["CHAT_MSG_" .. key] or key end
 -- How likely each kind of person is the one meant, for the name search and the whispers page.
 local RECENT, CLOSE_BY, FRIEND, GUILDIE = 0.5, 0.4, 0.3, 0.1
 
--- The channel wheel's pages, eight slices each from the top going clockwise: where to talk, who to whisper (the
--- target, the newest whisper partners, friends online, then a name search), the numbered channels and the zone's
+-- A friend in this game only (Battle.net's third friend level, after BattleTag and Real ID) no Battle.net whisper
+-- reaches: the game whispers their character instead, and so does the wheel.
+local TITLE = Enum and Enum.BattleNetFriendLevel and Enum.BattleNetFriendLevel.Title
+
+-- The character the game whispers for a Battle.net name that is a friend in this game only, else nil.
+local function TitleTarget(name)
+    local Get = ChatFrameUtil.GetCharacterWhisperTargetIfTitleFriend
+    local target = Get and Get(name)
+    return type(target) == "string" and target ~= "" and target or nil
+end
+
+-- The character a Battle.net friend plays in this game now, as a whisper target: the game's own for a friend in
+-- this game only, else named as its friends list names them (no realm on ours). Nil when they play none here.
+local function CharacterOf(info)
+    local game = info.gameAccountInfo
+    if not (game and game.isOnline) then return nil end
+    local Own = C_BattleNet.GetDefaultTitleWhisperTarget
+    local own = Own and info.bnetAccountID and Own(info.bnetAccountID)
+    if type(own) == "string" and own ~= "" then return own end
+    if game.clientProgram ~= BNET_CLIENT_WOW or game.wowProjectID ~= WOW_PROJECT_ID or not game.isInCurrentRegion then
+        return nil
+    end
+    local name, realm = game.characterName, game.realmName
+    if type(name) ~= "string" or name == "" then return nil end
+    if issecretvalue and (issecretvalue(name) or issecretvalue(realm)) then return nil end
+    if type(realm) ~= "string" or realm == "" or (RegionalUniqueNamesEnabled and RegionalUniqueNamesEnabled())
+        or realm == (GetNormalizedRealmName and GetNormalizedRealmName()) then
+        return name
+    end
+    return name .. "-" .. realm
+end
+
+-- The channel wheel's pages, eight slices each from the top going clockwise: where to talk; who to whisper (the
+-- target, the newest whisper partners, friends online and the characters Battle.net friends play here, then a name
+-- search); the same by Battle.net (only while a Battle.net friend is online); the numbered channels and the zone's
 -- ones to join. A slice the player cannot use now stays in its place, marked off.
 function ns.WheelPages()
     local L = ns.L
@@ -1091,28 +1124,41 @@ function ns.WheelPages()
         -- The last slice is no channel: the sticks then carry and size the keyboard.
         { label = L["MOVE_SLICE"], move = true },
     }
-    local people, seen = {}, {}
+    -- whispers to a character on one page, Battle.net whispers on the next: seven people each, then a name search
+    local people, bnet, seen = {}, {}, {}
+    local function Keep(list, label, chatType, target)
+        if seen[target] or #list >= 7 then return end
+        seen[target] = true
+        list[#list + 1] = { label = label, chatType = chatType, tellTarget = target }
+    end
     if UnitIsPlayer("target") and not UnitIsUnit("target", "player") then
         local target = GetUnitName("target", true)
         if target and not (issecretvalue and issecretvalue(target)) then
-            seen[target] = true
-            people[1] = { label = target:match("^[^%-]+"), chatType = "WHISPER", tellTarget = target }
+            Keep(people, target:match("^[^%-]+"), "WHISPER", target)
         end
     end
     local name, kind = ChatFrameUtil.GetLastTellTarget()
-    while name and name ~= "" and #people < 7 and not seen[name] do
-        seen[name] = true
-        people[#people + 1] = { label = name:match("^[^%-]+") or name, chatType = kind or "WHISPER", tellTarget = name }
+    local walked = {}
+    while name and name ~= "" and not walked[name] do
+        walked[name] = true
+        local character = kind == "BN_WHISPER" and TitleTarget(name)
+        if character then
+            Keep(people, character:match("^[^%-]+"), "WHISPER", character)
+        elseif kind == "BN_WHISPER" then
+            Keep(bnet, name:match("^[^%-]+") or name, "BN_WHISPER", name)
+        else
+            Keep(people, name:match("^[^%-]+") or name, "WHISPER", name)
+        end
         name, kind = ChatFrameUtil.GetNextTellTarget(name, kind)
     end
+    local online = false
     for _, friend in ipairs(ns.WhisperNames()) do
-        if #people >= 7 then break end
-        if friend.chance >= FRIEND and not seen[friend.tellTarget] then
-            seen[friend.tellTarget] = true
-            people[#people + 1] = { label = friend.label, chatType = friend.chatType, tellTarget = friend.tellTarget }
-        end
+        local byBnet = friend.chatType == "BN_WHISPER"
+        online = online or byBnet
+        if friend.chance >= FRIEND then Keep(byBnet and bnet or people, friend.label, friend.chatType, friend.tellTarget) end
     end
-    people[#people + 1] = { label = L["WHISPER_SOMEONE"], naming = true }
+    people[#people + 1] = { label = L["WHISPER_SOMEONE"], naming = "WHISPER" }
+    bnet[#bnet + 1] = { label = L["WHISPER_SOMEONE"], naming = "BN_WHISPER" }
     local channels, list = {}, { GetChannelList() }
     for i = 1, #list, 3 do
         if not list[i + 2] and #channels < 8 then
@@ -1128,13 +1174,18 @@ function ns.WheelPages()
     end
     -- The addon's own page: its settings window, and the keyboard's place.
     local own = { { label = L["SETTINGS_SLICE"], settings = true }, { label = L["MOVE_SLICE"], move = true } }
-    return { { title = L["WHEEL_TALK"], picks = talk }, { title = L["WHEEL_WHISPERS"], picks = people },
-        { title = L["WHEEL_CHANNELS"], picks = channels }, { title = L["TITLE"], picks = own } }
+    local pages = { { title = L["WHEEL_TALK"], picks = talk }, { title = L["WHEEL_WHISPERS"], picks = people } }
+    if online then pages[#pages + 1] = { title = L["WHEEL_BNET"], picks = bnet } end
+    pages[#pages + 1] = { title = L["WHEEL_CHANNELS"], picks = channels }
+    pages[#pages + 1] = { title = L["TITLE"], picks = own }
+    return pages
 end
 
--- Everyone a whisper can reach now, for the name search: battle.net friends by BattleTag and by the character they
--- play, WoW friends, the guild, the group, the target; the newest whisper partners count most.
-function ns.WhisperNames()
+-- Everyone a whisper can reach now, for the name search: Battle.net friends by BattleTag and by the character they
+-- play (a Battle.net whisper; none for a friend in this game only), the characters Battle.net friends play here
+-- (a whisper to the character), WoW friends, the guild, the group, the target; the newest whisper partners count
+-- most. Given a kind ("WHISPER" or "BN_WHISPER"), only the whispers of that kind.
+function ns.WhisperNames(only)
     local list, seen, recent = {}, {}, {}
     local name, kind = ChatFrameUtil.GetLastTellTarget()
     local rank = 0
@@ -1144,6 +1195,7 @@ function ns.WhisperNames()
         name, kind = ChatFrameUtil.GetNextTellTarget(name, kind)
     end
     local function Add(label, chatType, target, chance)
+        if only and chatType ~= only then return end
         if type(label) ~= "string" or type(target) ~= "string" or label == "" then return end
         if issecretvalue and (issecretvalue(label) or issecretvalue(target)) then return end
         local key = ns.Lower(label) .. "\0" .. target
@@ -1156,8 +1208,16 @@ function ns.WhisperNames()
         local info = C_BattleNet.GetFriendAccountInfo(i)
         local game = info and info.gameAccountInfo
         if game and game.isOnline then
-            Add(info.battleTag and info.battleTag:match("^[^#]+"), "BN_WHISPER", info.accountName, FRIEND)
-            Add(game.characterName, "BN_WHISPER", info.accountName, FRIEND)
+            if not (TITLE and info.friendLevel == TITLE) then
+                Add(info.battleTag and info.battleTag:match("^[^#]+"), "BN_WHISPER", info.accountName, FRIEND)
+                Add(game.characterName, "BN_WHISPER", info.accountName, FRIEND)
+            end
+            local character = CharacterOf(info)
+            if character then
+                local label = type(game.characterName) == "string" and game.characterName ~= "" and game.characterName
+                    or character:match("^[^%-]+")
+                Add(label, "WHISPER", character, FRIEND)
+            end
         end
     end
     for i = 1, C_FriendList.GetNumFriends() do

@@ -138,6 +138,7 @@ L["PROBE_CHAT"] = "Chatfokus wird 30 Sekunden lang aufgezeichnet: öffne jetzt d
     .. " speichert es."
 L["WHEEL_TALK"] = "Reden"
 L["WHEEL_WHISPERS"] = "Flüstern"
+L["WHEEL_BNET"] = "Battle.net"
 L["WHEEL_CHANNELS"] = "Kanäle"
 L["HINT_WHEEL"] = "Zeige mit einem Stick, wohin du schreibst, und lass ihn los. LB und RB blättern; %s oder %s"
     .. " schließt."

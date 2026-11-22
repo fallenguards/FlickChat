@@ -138,6 +138,7 @@ L["PROBE_CHAT"] = "enregistrement du focus de la discussion pendant 30 secondes 
     .. " d'habitude. /reload le sauvegarde."
 L["WHEEL_TALK"] = "Parler"
 L["WHEEL_WHISPERS"] = "Chuchotements"
+L["WHEEL_BNET"] = "Battle.net"
 L["WHEEL_CHANNELS"] = "Canaux"
 L["HINT_WHEEL"] = "Pointez un stick vers où écrire, puis relâchez-le. LB et RB tournent la page ; %s ou %s ferme."
 L["WHEEL_LETGO"] = "%s : relâchez le stick pour écrire là."
