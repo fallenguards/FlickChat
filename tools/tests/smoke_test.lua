@@ -578,14 +578,14 @@ tells[1], tellKinds["|Kq2|k"] = "Jaina", nil
 -- online (2026-11-22: "you can send messages to people even while they're offline... ofc prio online ppl")
 local order = {}
 for _, pick in ipairs(ns.WheelPages()[3].picks) do order[#order + 1] = pick.label end
-Is("online first, then offline: favourites, then the most lately online", table.concat(order, ","),
+Is("online first, then offline: favorites, then the most lately online", table.concat(order, ","),
     "Aragorn,Frodo,Boromir,Gimli,Find a name")
 -- greyed on the wheel as the game's friends list greys them ("yes do that")
 Open()
 Press("PAD4")
 WheelTo("Battle.net")
 local function LabelColor(i) return table.concat(wheelFrame.slices[i].label.textColor, " ") end
-Is("an offline friend's slice is the friends list's grey", LabelColor(4), "0.486 0.518 0.541")
+Is("an offline friend's slice is the friends list's gray", LabelColor(4), "0.486 0.518 0.541")
 Is("one online stays white", LabelColor(1), "1 1 1")
 Is("so does the name search", LabelColor(5), "1 1 1")
 Press("PAD2")
@@ -599,7 +599,7 @@ Is("no whisper to a character for a friend offline", kinds.Gimli, nil)
 bnetFriends[1].gameAccountInfo.isOnline = false
 Is("every Battle.net friend offline: the page stays", Titles(), "Talk,Whispers,Battle.net,Channels,FlickChat")
 -- no Battle.net friend at all but one in this game only (no Battle.net whisper's): no Battle.net page
-local kept = { table.unpack(bnetFriends) }
+local kept = { unpack(bnetFriends) }
 for i = #bnetFriends, 1, -1 do
     if bnetFriends[i].friendLevel ~= 3 then table.remove(bnetFriends, i) end
 end
@@ -910,7 +910,7 @@ Press("PAD1")
 Is("then a tap of A sends the line", #sent, count + 1)
 
 -- profiles (GitHub issue #2; as WoW addons keep settings): each character on one, Default shared by all at first
-local toc = io.open(dir .. "/FlickChat.toc"):read("a")
+local toc = io.open(dir .. "/FlickChat.toc"):read("*a")
 Has("the toc saves a table per character", toc, "## SavedVariablesPerCharacter: FlickChatCharDB")
 Is("the per character table is that one", ns.char ~= nil and ns.char == FlickChatCharDB, true)
 Is("a character starts on Default", ns.ProfileName(), "Default")
