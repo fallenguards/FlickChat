@@ -27,7 +27,7 @@ read_globals = {
     "C_BattleNet", "SetOverrideBindingClick", "ClearOverrideBindings", "NUM_CHAT_WINDOWS", "FloatingChatFrameMixin", "SmartNavigation", "AuctionHouseFrame", "C_AuctionHouse", "g_auctionHouseSortsBySearchContext", "AuctionHouseFrameDisplayMode", "SmartNavigation_MarkFrameIgnored", "SmartNavigation_ClearIgnoreStatus", "SettingsPanel", "GameFontHighlightSmall", "issecurevariable",
     "MinimalSliderWithSteppersMixin", "LOCALIZED_CLASS_NAMES_MALE", "LE_PARTY_CATEGORY_INSTANCE", "GetZoneText",
     "GetSubZoneText", "GetChannelList", "GENERAL_CHAT_DOCK", "GamepadPersistentInputLegend", "FCFDock_SelectWindow",
-    "Enum", "BNET_CLIENT_WOW", "WOW_PROJECT_ID", "RegionalUniqueNamesEnabled", "GetNormalizedRealmName", "debugstack", "IsUsingGamepad", "OKAY", "GetNumFriends", "date",
+    "Enum", "FRIENDS_GRAY_COLOR", "BNET_CLIENT_WOW", "WOW_PROJECT_ID", "RegionalUniqueNamesEnabled", "GetNormalizedRealmName", "debugstack", "IsUsingGamepad", "OKAY", "GetNumFriends", "date",
     "IsShiftKeyDown", "IsControlKeyDown", "IsAltKeyDown", "C_CVar",
     "EnumerateServerChannels", "GetChannelName", "LeaveChannelByName", "SELECTED_CHAT_FRAME",
 }

@@ -206,7 +206,11 @@ function generic.SetFont(self, f, size) assert(type(size) == "number") self.font
 function generic.SetAlpha(self, alpha) self.alpha = alpha end
 function generic.SetColorTexture(self, r, g, b, a) self.color = { r, g, b, a or 1 } end
 function generic.SetPoint(self, ...) for i = 1, select("#", ...) do local v = select(i, ...) assert(v ~= nil or i > 1, "nil point arg") end end
-function generic.SetTextColor(self, r, g, b) assert(r and g and b, "color") end
+function generic.SetTextColor(self, r, g, b) assert(r and g and b, "color") self.textColor = { r, g, b } end
+function generic.GetTextColor(self)
+    local c = self.textColor or { 1, 1, 1 }
+    return c[1], c[2], c[3]
+end
 function generic.SetAttribute(self, key, value) self.attrs = self.attrs or {} self.attrs[key] = value end
 function generic.EnableGamePadButton(self, on) self.padButtons = on end
 local function Obj(parent)
@@ -576,6 +580,16 @@ local order = {}
 for _, pick in ipairs(ns.WheelPages()[3].picks) do order[#order + 1] = pick.label end
 Is("online first, then offline: favourites, then the most lately online", table.concat(order, ","),
     "Aragorn,Frodo,Boromir,Gimli,Find a name")
+-- greyed on the wheel as the game's friends list greys them ("yes do that")
+Open()
+Press("PAD4")
+WheelTo("Battle.net")
+local function LabelColor(i) return table.concat(wheelFrame.slices[i].label.textColor, " ") end
+Is("an offline friend's slice is the friends list's grey", LabelColor(4), "0.486 0.518 0.541")
+Is("one online stays white", LabelColor(1), "1 1 1")
+Is("so does the name search", LabelColor(5), "1 1 1")
+Press("PAD2")
+Press("PAD2")
 local offlineFound = false
 for _, name in ipairs(ns.WhisperNames("BN_WHISPER")) do offlineFound = offlineFound or name.label == "Gimli" end
 Is("the Battle.net search finds a friend offline", offlineFound, true)

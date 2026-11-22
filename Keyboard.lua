@@ -1022,6 +1022,8 @@ local WHEEL_SCALE, SLICE_OUT = 0.7, 150
 -- Past this (squared) a stick points at a slice; back under this it picks it (the game's own wheel's numbers).
 local POINT_SQ, LETGO_SQ = 0.25, 0.04
 local OFF_COLOR, PICK_COLOR = { 0.45, 0.45, 0.45 }, { 1, 1, 1 }
+-- a Battle.net friend offline: the grey the game's friends list names them in
+Fit.OFFLINE_COLOR = FRIENDS_GRAY_COLOR and { FRIENDS_GRAY_COLOR:GetRGB() } or { 0.486, 0.518, 0.541 }
 local wheel
 
 -- Slice i's direction: 1 at the top, then clockwise.
@@ -1109,7 +1111,8 @@ local function PaintWheel()
         local pick = picks[i]
         slice.label:SetText(pick and pick.label or "")
         slice.label:SetShown(not ask)
-        local color = (not pick or pick.off) and OFF_COLOR or ns.IsChannel(box, pick) and YELLOW or PICK_COLOR
+        local color = (not pick or pick.off) and OFF_COLOR or ns.IsChannel(box, pick) and YELLOW
+            or pick.offline and Fit.OFFLINE_COLOR or PICK_COLOR
         slice.label:SetTextColor(color[1], color[2], color[3])
         slice.off:SetShown(pick ~= nil and pick.off == true)
     end

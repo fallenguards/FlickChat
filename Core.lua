@@ -1127,10 +1127,16 @@ function ns.WheelPages()
     }
     -- whispers to a character on one page, Battle.net whispers on the next: seven people each, then a name search
     local people, bnet, seen = {}, {}, {}
+    -- Battle.net friends offline, by account: their slices are greyed as the game's friends list greys them
+    local names, away = ns.WhisperNames(), {}
+    for _, friend in ipairs(names) do
+        if friend.offline then away[friend.tellTarget] = true end
+    end
     local function Keep(list, label, chatType, target)
         if seen[target] or #list >= 7 then return end
         seen[target] = true
-        list[#list + 1] = { label = label, chatType = chatType, tellTarget = target }
+        list[#list + 1] = { label = label, chatType = chatType, tellTarget = target,
+            offline = chatType == "BN_WHISPER" and away[target] or nil }
     end
     if UnitIsPlayer("target") and not UnitIsUnit("target", "player") then
         local target = GetUnitName("target", true)
@@ -1153,7 +1159,7 @@ function ns.WheelPages()
         name, kind = ChatFrameUtil.GetNextTellTarget(name, kind)
     end
     local anyBnet, offline = false, {}
-    for _, friend in ipairs(ns.WhisperNames()) do
+    for _, friend in ipairs(names) do
         local byBnet = friend.chatType == "BN_WHISPER"
         anyBnet = anyBnet or byBnet
         if friend.offline then
