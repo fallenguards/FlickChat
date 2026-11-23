@@ -32,6 +32,9 @@ NineSliceLayouts = { Dialog = {} }
 NineSliceUtil = { ApplyLayoutByName = function(frame) frame.TopEdge = frame:CreateTexture(nil, "BORDER") end }
 MinimalSliderWithSteppersMixin = { Label = { Right = 2 }, Event = { OnValueChanged = "OnValueChanged" } }
 SOUNDKIT = {}
+-- the game's red error text, where a refusal goes: what it was asked to say
+red = {}
+UIErrorsFrame = { AddMessage = function(_, text) red[#red + 1] = text end }
 function PlaySound() end
 local cvars = { GamePadEnable = "1", GamePadEmulateCtrl = "PADRSHOULDER", GamePadEmulateShift = "NONE" }
 function GetCVar(k) return cvars[k] end
@@ -329,6 +332,15 @@ end
 local function Has(what, text, piece)
     Is(what .. " (" .. piece .. ")", tostring(text):find(piece, 1, true) ~= nil, true)
 end
+-- what fn writes to chat, its lines joined
+local function ChatDuring(fn)
+    local lines, before = {}, print
+    print = function(text) lines[#lines + 1] = tostring(text) end
+    local ok, err = pcall(fn)
+    print = before
+    assert(ok, err)
+    return table.concat(lines, " | ")
+end
 local function Down(b) kb.scripts.OnGamePadButtonDown(kb, b) end
 local function Up(b) kb.scripts.OnGamePadButtonUp(kb, b) end
 local function Told() return (kb.hint.text or ""):gsub("%s*\n%s*", " / ") end
@@ -460,15 +472,14 @@ Is("and the line stays where it was", box.header, "CHANNEL:4")
 Press("PAD2")
 JoinArmed()
 joinButton.scripts.PostClick(joinButton, "LeftButton", true)
-local joinSaid = {}
-local printBefore = print
-print = function(text) joinSaid[#joinSaid + 1] = text end
-for i = #timers, 1, -1 do
-    -- the newest live timer is the wait for the number
-    if type(timers[i]) == "table" and not timers[i].dead then timers[i].fn() break end
-end
-print = printBefore
-Has("a channel the game never numbers is said", joinSaid[1], "could not join Services")
+local joinSaid = ChatDuring(function()
+    for i = #timers, 1, -1 do
+        -- the newest live timer is the wait for the number
+        if type(timers[i]) == "table" and not timers[i].dead then timers[i].fn() break end
+    end
+end)
+Has("a channel the game never numbers is said in the red error text", red[#red], "Could not join Services")
+Is("and not in chat", joinSaid, "")
 Is("and the line stays where it was", box.header, "CHANNEL:4")
 JoinArmed()
 generic.Hide(box)
@@ -977,8 +988,7 @@ count = #sent
 Type("hello")
 Down("PAD1")
 Press("PAD3")
-Flick(1)
-Up("PAD1")
+Is("saving a phrase says nothing in chat (its slot shows it)", ChatDuring(function() Flick(1) Up("PAD1") end), "")
 Is("a phrase saved from the keyboard (A held, X, a flick) goes into this profile", (ns.Phrase(1) or ""):lower(), "hello")
 Is("Default keeps its own", FlickChatDB.profiles.Default.phrases[1], "for the horde")
 Is("saving sends nothing", #sent, count)
@@ -992,18 +1002,19 @@ Is("back the other way: Thrall's, its settings with it", ns.ProfileName() == "Th
 ns.NewProfile("Default")
 Is("a new profile named as one already there turns to it", ns.ProfileName(), "Default")
 ns.UseProfile("Thrall - Realm")
-ns.CopyProfile("Default")
+Is("copy from says nothing in chat", ChatDuring(function() ns.CopyProfile("Default") end), "")
 Is("copy from: Default's settings into this profile", ns.Phrase(1) == "for the horde" and ns.profile.size == size, true)
 Is("still on this profile", ns.ProfileName(), "Thrall - Realm")
 ns.SetPhrase(1, "lok'tar")
-ns.ResetProfile()
+Is("a reset says nothing in chat", ChatDuring(ns.ResetProfile), "")
 Is("a reset: every setting of this profile back to its default", ns.Phrase(1) == "hi" and ns.profile.size == 100, true)
 Is("Default untouched by it", FlickChatDB.profiles.Default.phrases[1], "for the horde")
-ns.DeleteProfile()
+Is("a delete says nothing in chat", ChatDuring(ns.DeleteProfile), "")
 Is("a delete: the profile gone and the character on Default",
     FlickChatDB.profiles["Thrall - Realm"] == nil and ns.ProfileName() == "Default", true)
-ns.DeleteProfile()
+Is("deleting Default: not in chat", ChatDuring(ns.DeleteProfile), "")
 Is("Default stays", FlickChatDB.profiles.Default ~= nil and ns.ProfileName() == "Default", true)
+Is("refused in the red error text", red[#red], "Default cannot be deleted.")
 -- a character on a profile another deleted: on Default at its next load
 FlickChatCharDB.profile = "Gone"
 ns.UseProfile(FlickChatCharDB.profile, true)
@@ -1818,6 +1829,83 @@ for _, code in ipairs(codes) do
 end
 ns.locale = "enUS"
 Is("English shows English", ns.L.TITLE, ns.EN.TITLE)
+
+-- Chat is for what the player cannot see: a line for someone new, an update, the answer to a typed /flick, a
+-- result out of sight. What they just did and can see is never said (his rule for every addon; FlickChat's last
+-- such lines went 2026-11-23), and a refusal goes to the red error text (ns.Refuse). Every chat line in the
+-- shipped files is one listed here with why; a new one fails until it is listed or cut.
+do
+    local CHAT = {
+        TITLE = "the addon's name before each line (ns.Say itself)",
+        NEWS_LANGUAGES = "for someone new: the languages to type in, once",
+        UPDATE_OUT = "an update reminder",
+        FEEDBACK = "where to report, once a version",
+        WHEEL_CHAT_OFF = "another addon switched off the menu's Chat: nothing on screen says so",
+        ANOTHER_ADDON = "part of WHEEL_CHAT_OFF",
+        LANG_MISSING = "a language's words are not installed: nothing on screen says so",
+        SEARCH_BEHIND = "the new results wait behind the item's page, out of sight",
+        FORGOT_BACK = "the settings button's only answer: the words come back out of sight",
+        MOVE_NEXT = "what the next chat open does (settings button or /flick move)",
+        MOVE_GUIDE_NEXT = "what the next chat open does (settings button)",
+        LESSON_AGAIN = "what the next keyboard open does (settings button or /flick lesson)",
+        PRACTICE_NEXT = "what the next chat open does (settings button or /flick practice)",
+        SIZE = "the answer to /flick size",
+        LAYOUT_ = "the answer to /flick layout",
+        PROBE_CHAT = "the answer to /flick chatprobe",
+        PROBE_STICKS = "the answer to /flick sticks",
+        PHRASES_RESET = "the answer to /flick phrases reset",
+        USAGE = "the answer to a /flick it does not know",
+        LOWER_ON = "the answer to /flick lowercase",
+        LOWER_OFF = "the answer to /flick lowercase",
+        ON = "the answer to /flick",
+        OFF = "the answer to /flick",
+    }
+    -- the two lines that pass a line on
+    local KEYLESS = { ["ns.Say(text)"] = true, ["function ns.Tell(text, button)"] = true }
+    local found, wrong = {}, {}
+    local function Scan(path)
+        local n = 0
+        for line in io.lines(path) do
+            n = n + 1
+            local code = line:gsub("\r", ""):match("^%s*(.-)%s*$")
+            local chat = code:sub(1, 2) ~= "--" and (code:find("ns%.Say%(") or code:find("ns%.Tell%(")
+                or (" " .. code):find("[^%w_.:]print%(")
+                or (code:find("AddMessage%(") and not code:find("UIErrorsFrame:AddMessage", 1, true)))
+            if chat then
+                local where, keys = ("%s:%d"):format(path:match("[^/]+$"), n), 0
+                for key in code:gmatch('"([%u_][%u%d_]*)"') do
+                    keys, found[key] = keys + 1, true
+                    if not CHAT[key] then wrong[#wrong + 1] = where .. " " .. key end
+                end
+                if keys == 0 and not KEYLESS[code] then wrong[#wrong + 1] = where .. " " .. code end
+            end
+        end
+    end
+    for line in io.lines(dir .. "/FlickChat.toc") do
+        line = line:gsub("\r", ""):gsub("\\", "/")
+        if line ~= "" and line:sub(1, 1) ~= "#" then Scan(dir .. "/" .. line) end
+    end
+    for code in pairs(ns.locales) do
+        local name = "FlickChat_" .. code
+        local toc = io.open(dir .. "/Packs/" .. name .. "/" .. name .. ".toc")
+        if toc then
+            for line in toc:lines() do
+                line = line:gsub("\r", "")
+                if line ~= "" and line:sub(1, 1) ~= "#" then Scan(dir .. "/Packs/" .. name .. "/" .. line) end
+            end
+            toc:close()
+        end
+    end
+    table.sort(wrong)
+    Is("every chat line in the shipped files is listed with why (CHAT in the smoke test), or cut",
+        table.concat(wrong, ", "), "")
+    local stale = {}
+    for key in pairs(CHAT) do
+        if not found[key] then stale[#stale + 1] = key end
+    end
+    table.sort(stale)
+    Is("and every one listed is still said", table.concat(stale, ", "), "")
+end
 
 print(failed == 0 and "all checks passed" or (failed .. " check(s) failed"))
 os.exit(failed == 0 and 0 or 1)

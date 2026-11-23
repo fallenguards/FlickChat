@@ -16,7 +16,7 @@ local function AuctionSearch(text)
     local api = C_AuctionHouse
     if not (house and api and api.SendBrowseQuery) then return end
     if api.IsThrottledMessageSystemReady and not api.IsThrottledMessageSystemReady() then
-        return ns.Say(ns.L["SEARCH_WAIT"])
+        return ns.Refuse(ns.L["SEARCH_WAIT"])
     end
     local filters, minLevel, maxLevel
     local button = house.SearchBar and house.SearchBar.FilterButton

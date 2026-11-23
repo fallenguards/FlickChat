@@ -17,7 +17,7 @@ globals = {
 }
 
 read_globals = {
-    "CreateFrame", "UIParent", "C_Timer", "C_ChatInfo", "time", "Settings", "wipe", "InputUtil", "STANDARD_TEXT_FONT", "issecretvalue",
+    "CreateFrame", "UIParent", "C_Timer", "C_ChatInfo", "time", "Settings", "wipe", "InputUtil", "STANDARD_TEXT_FONT", "issecretvalue", "UIErrorsFrame",
     "SOUNDKIT", "InCombatLockdown", "GetBindingText", "C_Texture", "C_FriendList", "GetCVar", "IsInGuild", "GetTime",
     "GetLocale", "GetBindingAction", "ChatFrameUtil", "UnitIsUnit", "SetBinding", "IsInRaid", "GetUnitName",
     "GetNumGuildMembers", "GetCurrentKeyBoardFocus", "GameFontNormal", "GameFontHighlight", "C_AddOns", "UnitName", "GetRealmName", "GetCursorPosition", "FCFDock_GetSelectedWindow", "RegisterStateDriver",

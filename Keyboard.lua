@@ -324,7 +324,6 @@ local Send, draft
 local function SavePhrase(digit)
     local text = Message()
     ns.SetPhrase(digit, text)
-    ns.Say(L["PHRASE_SAVED"]:format(L["PHRASE_SLOT_" .. digit], text))
     S.committed, S.flicks, S.literal, S.undo, S.autoSpace = "", "", nil, nil, false
     S.phraseSave, S.phraseList = false, PhrasePicks()
     Flash(digit)
@@ -946,7 +945,6 @@ Send = function()
             FinishLesson()
             Reset("")
             box:SetText("")
-            ns.Say(L["LESSON_DONE"])
             Guess()
         end
         return Show()
@@ -1195,7 +1193,7 @@ local function AskJoin(w, pick, at)
     local armed = ns.ArmJoin(name, function()
         Back(true)
         ns.AwaitChannel(name, function(id)
-            if not id then return ns.Say(L["JOIN_FAILED"]:format(name)) end
+            if not id then return ns.Refuse(L["JOIN_FAILED"]:format(name)) end
             if box ~= joiner then return end
             ns.SwitchChannel(box, { chatType = "CHANNEL", channelTarget = id })
             Use("channel")
@@ -1378,7 +1376,6 @@ local function Press(button)
             ns.Forget(word)
             D.Refresh(S.names)
             Guess()
-            ns.Say(L["FORGOT"]:format(ns.Lower(word)))
         end
         return Show()
     end

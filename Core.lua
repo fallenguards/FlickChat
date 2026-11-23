@@ -428,6 +428,12 @@ end
 ns.BLUE = { 0.18, 0.56, 0.90 }
 function ns.Say(text) print("|cff2e8fe6" .. ns.L["TITLE"] .. "|r " .. text) end
 
+-- What cannot be done, or did not go: the game's red error text, never chat. Chat says nothing of what the player
+-- just did and can see (his rule for every addon; FlickChat's last such lines went 2026-11-23).
+function ns.Refuse(text)
+    if UIErrorsFrame then UIErrorsFrame:AddMessage(text, 1, 0.1, 0.1) end
+end
+
 -- What a settings button set going: a chat line, and the pressed button's own text says it where the player is
 -- looking. Never a dialog: a StaticPopup shown by addon code over the Settings window leaves the game's
 -- controller bindings tainted, and closing the window is then refused.
@@ -524,23 +530,20 @@ function ns.CopyProfile(from)
     wipe(ns.profile)
     for key, value in pairs(settings) do ns.profile[key] = value end
     ns.UseProfile(ns.ProfileName())
-    ns.Say(ns.L["PROFILE_COPIED"]:format(ns.ProfileLabel(from), ns.ProfileLabel()))
 end
 
 function ns.ResetProfile()
     wipe(ns.profile)
     ns.UseProfile(ns.ProfileName())
-    ns.Say(ns.L["PROFILE_RESET"]:format(ns.ProfileLabel()))
 end
 
 -- Delete: this character's profile goes and it is on Default; another character on it goes to Default at its next
 -- login. Default stays.
 function ns.DeleteProfile()
     local name = ns.ProfileName()
-    if name == DEFAULT_PROFILE then return ns.Say(ns.L["PROFILE_KEEP_DEFAULT"]) end
+    if name == DEFAULT_PROFILE then return ns.Refuse(ns.L["PROFILE_KEEP_DEFAULT"]) end
     ns.db.profiles[name] = nil
     ns.UseProfile(DEFAULT_PROFILE)
-    ns.Say(ns.L["PROFILE_DELETED"]:format(name, ns.ProfileLabel()))
 end
 
 -- Quick phrases by slot (1-4 the left stick's up, right, down, left; 5-8 the right's): the profile's, else the
