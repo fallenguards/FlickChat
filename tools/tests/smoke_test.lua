@@ -29,7 +29,12 @@ Enum = Enum or { UITextureSliceMode = { Stretched = 0 } }
 C_Texture = { GetAtlasInfo = function() return { width = 32, height = 32 } end }
 -- the game's border: one piece of it, to see it is left alone
 NineSliceLayouts = { Dialog = {} }
-NineSliceUtil = { ApplyLayoutByName = function(frame) frame.TopEdge = frame:CreateTexture(nil, "BORDER") end }
+NineSliceUtil = { ApplyLayoutByName = function(frame)
+    frame.TopEdge = frame:CreateTexture(nil, "BORDER")
+    -- a corner at its art's own size, as the game's layout sets it
+    frame.TopLeftCorner = frame:CreateTexture(nil, "BORDER")
+    frame.TopLeftCorner:SetSize(32, 32)
+end }
 MinimalSliderWithSteppersMixin = { Label = { Right = 2 }, Event = { OnValueChanged = "OnValueChanged" } }
 SOUNDKIT = {}
 -- the game's red error text, where a refusal goes: what it was asked to say
@@ -283,6 +288,8 @@ end
 assert(loaded >= 5, "the toc lists too few files")
 ns.events.scripts.OnEvent(ns.events, "ADDON_LOADED", "FlickChat")
 ns.db.lessonDone = true
+-- the hint line's tip for the R3 hold has checks of its own
+ns.db.uses.move = 3
 
 local function Open()
     box.text = ""
@@ -924,6 +931,43 @@ do
     ns.profile.moveX, ns.profile.moveY, ns.profile.size = x0, nil, size0
 end
 
+-- The hint lines in a box like the button guide's (the settings' Hint box, on unless turned off), and the hold told
+-- on that line until the player has used it (2026-11-23: bare lines were hard to read over the action bars, and
+-- nothing he saw told of the hold).
+do
+    local uses = ns.db.uses
+    local was = { move = uses.move, flick = uses.flick, take = uses.take }
+    uses.move, uses.flick, uses.take = 0, 99, 99
+    Press("PADRSTICK")
+    Press("PADRSTICK")
+    Has("the hint line tells of the hold", Told(), "to move or size the keyboard")
+    Is("in a box", kb.hintBox:IsShown(), true)
+    Is("never lower than its border's two corners", kb.hintBox:GetHeight() >= 64, true)
+    Is("its lines over it", kb.hint.parent, kb.hintLayer)
+    for _ = 1, 3 do
+        Down("PADRSTICK")
+        lastTick = nil
+        timers[#timers].fn()
+        Up("PADRSTICK")
+        Press("PAD2")
+    end
+    Is("held three times, the line says it no more", (Told():find("move or size", 1, true)), nil)
+    Has("R3's label still does", kb.toggle.label:GetText(), "(hold: move)")
+    Is("Hint box is a setting", ns.optionRows.hintBox[1](), true)
+    ns.optionRows.hintBox[2](false)
+    Down("PADRSTICK")
+    lastTick = nil
+    timers[#timers].fn()
+    Up("PADRSTICK")
+    Has("Hint box off: the line still says what to do", Told(), "move the keyboard")
+    Is("bare, as before", kb.hintBox:IsShown(), false)
+    Is("and kept in the profile", ns.profile.hintBoxOff, true)
+    ns.optionRows.hintBox[2](true)
+    Is("on again: in the box", kb.hintBox:IsShown(), true)
+    Press("PAD2")
+    uses.move, uses.flick, uses.take = was.move, was.flick, was.take
+end
+
 -- quick phrases: holding A opens their page, up until A is held again, so both sticks are free (2026-11-21)
 local function HoldA()
     Down("PAD1")
@@ -1175,8 +1219,8 @@ rowList[5].OnSmartNavDeselect(rowList[5])
 local last = #rowList
 rowList[last - 1].OnSmartNavSelect(rowList[last - 1])
 Is("near the end the row after the arrow's is in view", last * 26 <= (own.scroll.scrolled or 0) + 15 * 26, true)
-rowList[20].OnSmartNavSelect(rowList[20])
-Is("back up, the stop before it is in view, the title between with it", (18 - 1) * 26 >= (own.scroll.scrolled or 0), true)
+rowList[21].OnSmartNavSelect(rowList[21])
+Is("back up, the stop before it is in view, the title between with it", (19 - 1) * 26 >= (own.scroll.scrolled or 0), true)
 generic.Hide(own)
 generic.Hide(listed.frame)
 SlashCmdList.FLICKCHAT("options")
@@ -1197,7 +1241,7 @@ own.scripts.OnGamePadButtonDown(own, "PAD1")
 Is("A flips the first box", ns.profile.lowercase == true, not was)
 own.scripts.OnGamePadButtonDown(own, "PAD1")
 local size = ns.profile.size
-for _ = 1, 7 do own.scripts.OnGamePadButtonDown(own, "PADDDOWN") end
+for _ = 1, 8 do own.scripts.OnGamePadButtonDown(own, "PADDDOWN") end
 own.scripts.OnGamePadButtonDown(own, "PADDRIGHT")
 Is("d-pad down to the size, right adds to it", ns.profile.size, size + 5)
 own.scripts.OnGamePadButtonDown(own, "PADDLEFT")

@@ -74,6 +74,7 @@ local PROFILE_DEFAULTS = { enabled = true, layout = "letters", size = 100, phras
     textSize = 100, backOpacity = 90 }
 -- a profile's other settings: off (nil) until set
 local PROFILE_KEYS = { "lowercase", "matureFilter", "phraseFill", "hideLine", "hintsToggle", "guideOff", "stickTipsOff",
+    "hintBoxOff",
     "shape", "language", "moveX", "moveY", "guideX", "guideY" }
 local DEFAULT_PROFILE = "Default"
 ns.DEFAULT_PROFILE = DEFAULT_PROFILE
@@ -598,6 +599,11 @@ local ROWS = {
     end },
     stickTips = { function() return not ns.profile.stickTipsOff end, function(on)
         if on then ns.profile.stickTipsOff = nil else ns.profile.stickTipsOff = true end
+    end },
+    -- the hint lines in a box like the button guide's; hintBoxOff: the bare lines
+    hintBox = { function() return not ns.profile.hintBoxOff end, function(on)
+        if on then ns.profile.hintBoxOff = nil else ns.profile.hintBoxOff = true end
+        if ns.Restyle then ns.Restyle() end
     end },
     phraseSend = { function() return not ns.profile.phraseFill end, function(on)
         if on then ns.profile.phraseFill = nil else ns.profile.phraseFill = true end

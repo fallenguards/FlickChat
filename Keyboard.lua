@@ -28,6 +28,8 @@ local HOLD_DELAY, HOLD_REPEAT, DOUBLE_TAP, FLASH = 0.45, 0.25, 0.4, 0.18
 local FLICK_TIP_USES = 30
 -- The symbols page's line shows, hints hidden or not, until the player has held a box and picked from it this often.
 local PICK_TIP_USES = 3
+-- The hold that moves and sizes the keyboard (R3) is told on the hint line until the player has used it this often.
+local MOVE_TIP_USES = 3
 -- A pause this long on flicks no whole word fits: the player may think the word done, so say how to spell it.
 local MISSING_PAUSE = 1.2
 -- The first-run lesson types "anyone need a healer" with each box lit (words that take a few flicks before the
@@ -73,6 +75,8 @@ TEXT.font, TEXT.fonts = STANDARD_TEXT_FONT, { ruRU = "Fonts\\FRIZQT___CYR.TTF" }
 -- The button guide is its own box above the keyboard (as the game's controller legend is); R3 shows or hides it,
 -- and a free line over the top right of the whole stack always says so.
 local TOGGLE_GAP = 4
+-- The hint lines' box (the settings' Hint box): the lines this far in from its edges.
+local HINT_PAD = 14
 local NOTHING = {}
 -- The guesses: a d-pad cross of button marks between the two sticks, each word reaching out from its own.
 local CELL_H, HUB_R, DOT, GAP, PAD = 34, 20, 12, 6, 16
@@ -1412,7 +1416,10 @@ local function Press(button)
         if S.r3Timer then S.r3Timer:Cancel() end
         S.r3Timer = C_Timer.NewTimer(HOLD_DELAY, function()
             S.r3Timer = nil
-            if S.r3Down and Fit.CanMove() then Move.Start() end
+            if S.r3Down and Fit.CanMove() then
+                Use("move")
+                Move.Start()
+            end
         end)
     elseif button == "PADLSTICK" then
         Capital()
@@ -1703,6 +1710,11 @@ local function Hint()
     -- Mid-word, until the player has kept a good few: one flick per letter, never the same box over and over.
     if S.flicks ~= "" and (ns.db.uses.take or 0) < FLICK_TIP_USES then return L["HINT_NEXT"] end
     if not Word() and (ns.db.uses.flick or 0) < FLICK_TIP_USES then return L["HINT_FLICK"] end
+    -- Until the player has used it a few times: holding R3 moves and sizes the keyboard (the label's "hold: move"
+    -- alone went unseen, 2026-11-23).
+    if Fit.CanMove() and (ns.db.uses.move or 0) < MOVE_TIP_USES then
+        return L["HINT_HOLD_MOVE"]:format(Glyph("PADRSTICK"))
+    end
     return ""
 end
 
@@ -1955,16 +1967,24 @@ Paint = function()
     -- guide and the reminders there; with the keyboard high on the screen they stay under it.
     -- Under the lesson's lines a row of its own for the skip reminder, with a little air between.
     local row = S.lesson and size + 10 or 0
+    local said = kb.hint:GetText() ~= nil
+    -- In a box like the button guide's (the settings' Hint box): bare, the lines were hard to read over the
+    -- action bars under a keyboard by chat (2026-11-23). Off: the bare lines, the lesson's on their dark strip.
+    local boxed = not ns.profile.hintBoxOff
     local lift = false
     if S.lesson and (kb:GetTop() or 0) * kb:GetEffectiveScale() < UIParent:GetHeight() * UIParent:GetEffectiveScale() * 0.7 then
         lift = 14
         if kb.toggle.over == kb.guide then lift = lift + kb.guide:GetHeight() + 4 end
         if not ns.profile.stickTipsOff then lift = lift + TOGGLE_GAP + (kb.toggle.two and 36 or 18) end
         lift = lift + row
+        -- the box's edge further out than the strip's
+        if boxed then lift = lift + HINT_PAD - 7 end
     end
-    if kb.hintLift ~= lift then
-        kb.hintLift = lift
+    local place = tostring(lift) .. (boxed and " boxed" or "")
+    if kb.hintPlace ~= place then
+        kb.hintPlace = place
         kb.hint:ClearAllPoints()
+        kb.hintBox:ClearAllPoints()
         if lift then
             -- as wide as over the wide shape, whatever the shape (centred): the lesson's lines break the same
             local out = (kb.wideW - kb.baseW) / 2
@@ -1977,12 +1997,32 @@ Paint = function()
             if box and not box.chatFrame and not kb.barOver and kb.bar:IsShown() then
                 drop = kb.bar:GetHeight() * kb.bar:GetEffectiveScale() / kb:GetEffectiveScale() + 6
             end
-            kb.hint:SetPoint("TOPLEFT", kb, "BOTTOMLEFT", 6, -drop)
-            kb.hint:SetPoint("TOPRIGHT", kb, "BOTTOMRIGHT", -6, -drop)
+            if boxed then
+                -- the box as wide as the keyboard, the lines across its middle
+                kb.hintBox:SetPoint("TOPLEFT", kb, "BOTTOMLEFT", 0, -drop)
+                kb.hintBox:SetPoint("TOPRIGHT", kb, "BOTTOMRIGHT", 0, -drop)
+                kb.hint:SetPoint("LEFT", kb.hintBox, "LEFT", HINT_PAD, 0)
+                kb.hint:SetPoint("RIGHT", kb.hintBox, "RIGHT", -HINT_PAD, 0)
+            else
+                kb.hint:SetPoint("TOPLEFT", kb, "BOTTOMLEFT", 6, -drop)
+                kb.hint:SetPoint("TOPRIGHT", kb, "BOTTOMRIGHT", -6, -drop)
+            end
         end
     end
     kb.hintBack:SetPoint("BOTTOMRIGHT", kb.hint, "BOTTOMRIGHT", 8, -7 - row)
-    kb.hintBack:SetShown(lift ~= false and kb.hint:GetText() ~= nil)
+    kb.hintBack:SetShown(lift ~= false and said and not boxed)
+    kb.hintBox:SetShown(boxed and said)
+    if boxed and said then
+        -- the lines over the box, whatever moved its level
+        kb.hintLayer:SetFrameLevel(kb.hintBox:GetFrameLevel() + 1)
+        if lift then
+            kb.hintBox:SetPoint("BOTTOMRIGHT", kb.hint, "BOTTOMRIGHT", HINT_PAD, -HINT_PAD - row)
+        else
+            -- never lower than its border's two corners, which would cross
+            local corner = kb.hintBox.TopLeftCorner
+            kb.hintBox:SetHeight(math.max(corner and 2 * corner:GetHeight() or 0, kb.hint:GetStringHeight() + 2 * HINT_PAD))
+        end
+    end
     if kb.skipSize ~= size then
         kb.hintSkip:SetFont(TEXT.font, size, "OUTLINE")
         kb.skipSize = size
@@ -2011,6 +2051,9 @@ Paint = function()
     end
     kb.hintGoal:SetText(goal)
     kb.hintBack:SetPoint("TOPLEFT", kb.hint, "TOPLEFT", -8, 7 + (goal ~= "" and size + 14 or 0))
+    if boxed and said and lift then
+        kb.hintBox:SetPoint("TOPLEFT", kb.hint, "TOPLEFT", -HINT_PAD, HINT_PAD + (goal ~= "" and size + 14 or 0))
+    end
     Layout()
 end
 
@@ -2085,7 +2128,7 @@ function ns.Restyle()
     local crossH = CROSS_H + 2.5 * math.max(0, TEXT.guess - TEXT.base.guess)
     -- the dark backing at the player's opacity, none at 0; the border stays solid
     local opacity = (ns.profile.backOpacity or 90) / 100
-    for _, frame in ipairs({ kb, kb.guide }) do
+    for _, frame in ipairs({ kb, kb.guide, kb.hintBox }) do
         frame.back:SetAlpha(opacity)
         frame.back:SetShown(opacity > 0)
     end
@@ -2197,7 +2240,7 @@ function ns.Restyle()
     kb.hint:ClearAllPoints()
     kb.hint:SetPoint("TOPLEFT", kb, "BOTTOMLEFT", 6, -4)
     kb.hint:SetPoint("TOPRIGHT", kb, "BOTTOMRIGHT", -6, -4)
-    kb.hintLift = false
+    kb.hintPlace = nil
     if box or S.preview then Paint() end
     if S.preview then ns.SeatPreview() end
 end
@@ -2376,7 +2419,15 @@ local function Build()
         kb.slots[i] = kb:CreateFontString(nil, "ARTWORK")
         kb.marks[i] = kb:CreateFontString(nil, "ARTWORK")
     end
-    kb.hint = kb:CreateFontString(nil, "ARTWORK")
+    -- The hint lines' box, drawn as the button guide's, and the lines on a frame of their own over it.
+    kb.hintBox = CreateFrame("Frame", nil, kb)
+    kb.hintBox:SetClampedToScreen(true)
+    Dress(kb.hintBox)
+    kb.hintBox:Hide()
+    kb.hintLayer = CreateFrame("Frame", nil, kb)
+    kb.hintLayer:SetAllPoints(kb)
+    kb.hintLayer:SetFrameLevel(kb.hintBox:GetFrameLevel() + 1)
+    kb.hint = kb.hintLayer:CreateFontString(nil, "ARTWORK")
     kb.hint:SetTextColor(1, 0.82, 0)
     -- behind the lesson's lines when they stand over the keyboard
     kb.hintBack = kb:CreateTexture(nil, "BACKGROUND")
@@ -2385,10 +2436,10 @@ local function Build()
     kb.hintBack:SetPoint("BOTTOMRIGHT", kb.hint, "BOTTOMRIGHT", 8, -7)
     kb.hintBack:Hide()
     -- the lesson's way out, apart from its lines: at the right end of their last row
-    kb.hintSkip = kb:CreateFontString(nil, "ARTWORK")
+    kb.hintSkip = kb.hintLayer:CreateFontString(nil, "ARTWORK")
     kb.hintSkip:SetTextColor(0.82, 0.82, 0.82)
     kb.hintSkip:SetPoint("TOPRIGHT", kb.hint, "BOTTOMRIGHT", 0, -8)
-    kb.hintGoal = kb:CreateFontString(nil, "ARTWORK")
+    kb.hintGoal = kb.hintLayer:CreateFontString(nil, "ARTWORK")
     kb.hintGoal:SetTextColor(1, 0.82, 0)
     kb.hintGoal:SetPoint("BOTTOM", kb.hint, "TOP", 0, 10)
     kb.bar = CreateFrame("Frame", nil, kb)
