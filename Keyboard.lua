@@ -28,8 +28,6 @@ local HOLD_DELAY, HOLD_REPEAT, DOUBLE_TAP, FLASH = 0.45, 0.25, 0.4, 0.18
 local FLICK_TIP_USES = 30
 -- The symbols page's line shows, hints hidden or not, until the player has held a box and picked from it this often.
 local PICK_TIP_USES = 3
--- The hold that moves and sizes the keyboard (R3) is told on the hint line until the player has used it this often.
-local MOVE_TIP_USES = 3
 -- A pause this long on flicks no whole word fits: the player may think the word done, so say how to spell it.
 local MISSING_PAUSE = 1.2
 -- The first-run lesson types "anyone need a healer" with each box lit (words that take a few flicks before the
@@ -1416,10 +1414,7 @@ local function Press(button)
         if S.r3Timer then S.r3Timer:Cancel() end
         S.r3Timer = C_Timer.NewTimer(HOLD_DELAY, function()
             S.r3Timer = nil
-            if S.r3Down and Fit.CanMove() then
-                Use("move")
-                Move.Start()
-            end
+            if S.r3Down and Fit.CanMove() then Move.Start() end
         end)
     elseif button == "PADLSTICK" then
         Capital()
@@ -1710,18 +1705,14 @@ local function Hint()
     -- Mid-word, until the player has kept a good few: one flick per letter, never the same box over and over.
     if S.flicks ~= "" and (ns.db.uses.take or 0) < FLICK_TIP_USES then return L["HINT_NEXT"] end
     if not Word() and (ns.db.uses.flick or 0) < FLICK_TIP_USES then return L["HINT_FLICK"] end
-    -- Until the player has used it a few times: holding R3 moves and sizes the keyboard (the label's "hold: move"
-    -- alone went unseen, 2026-11-23).
-    if Fit.CanMove() and (ns.db.uses.move or 0) < MOVE_TIP_USES then
-        return L["HINT_HOLD_MOVE"]:format(Glyph("PADRSTICK"))
-    end
     return ""
 end
 
 -- Every button with the game's own icon. The guide box (R3 hides it) holds the shoulders as the pad holds them, each
 -- hand's trigger over its bumper over its middle button; the face buttons sit in a bar under the chat line, where
 -- the game's controller mode keeps its own chat buttons. Menu stays the game's; A sends. CHORD: LT and RT together.
-local COLUMNS = { { "PADLTRIGGER", "PADLSHOULDER", "PADBACK" }, { "PADRTRIGGER", "PADRSHOULDER", "CHORD" } }
+-- Under the right hand's, R3 held moves the keyboard (his ask, 2026-11-23: the hold belongs in this box).
+local COLUMNS = { { "PADLTRIGGER", "PADLSHOULDER", "PADBACK" }, { "PADRTRIGGER", "PADRSHOULDER", "CHORD", "PADRSTICK" } }
 local FACE = { "PAD1", "PAD3", "PAD4", "PAD2" }
 local ON_BAR = { PAD1 = true, PAD3 = true, PAD4 = true, PAD2 = true }
 -- The bar: its height, the room inside its ends, and between two buttons.
@@ -1739,6 +1730,7 @@ local function Labels()
     local upNext = S.flicks ~= "" and #S.stems >= 2 and S.stems[S.shown % #S.stems + 1]
     labels.PADRSHOULDER = upNext and L["NEXT_IS"]:format(Cap(upNext)) or L["NEXT"]
     labels.PADRTRIGGER, labels.CHORD = L["KEEP"], L["SLASH"]
+    labels.PADRSTICK = L["GUIDE_HOLD_MOVE"]
     labels.PAD4 = S.lesson and L["LESSON_SKIP"] or L["CHANNEL"]
     labels.PAD3 = S.phrases and L["SAVE_PHRASE"] or S.symbols and L["LETTERS"] or L["SYMBOLS"]
     -- In a fight the game lets no addon close chat: B puts the keyboard away and the game's own B closes it.
@@ -1804,8 +1796,10 @@ local function PlacePrompts()
         return most
     end
     local x2 = GUIDE_EDGE + GUIDE_ICON + LABEL_GAP + Widest(COLUMNS[1]) + GUIDE_COL
-    -- the game's own box height for three rows: its last row's spare room comes off the bottom margin
-    local height = GUIDE_ROW * 3 + GUIDE_EDGE * 2 - (GUIDE_ROW - GUIDE_ICON)
+    -- the game's own box's measures, a row more for the longer column: the last row's spare room comes off the
+    -- bottom margin
+    local rows = math.max(#COLUMNS[1], #COLUMNS[2])
+    local height = GUIDE_ROW * rows + GUIDE_EDGE * 2 - (GUIDE_ROW - GUIDE_ICON)
     kb.guide:SetSize(x2 + GUIDE_ICON + LABEL_GAP + Widest(COLUMNS[2]) + GUIDE_EDGE, height)
     for c, keys in ipairs(COLUMNS) do
         for row, key in ipairs(keys) do
@@ -1850,7 +1844,8 @@ local function PaintPrompts()
     local toggle = kb.toggle
     SetIcon(toggle, "PADRSTICK")
     local text = L[ns.profile.guideOff and "HINTS_SHOW" or "HINTS_HIDE"]
-    if Fit.CanMove() then text = L["HOLD_MOVE"]:format(text) end
+    -- the hold said here only while the guide, which says it, is away
+    if Fit.CanMove() and not kb.guide:IsShown() then text = L["HOLD_MOVE"]:format(text) end
     if toggle.plain then text = toggle.plain .. " " .. text end
     toggle.label:SetText(text)
     -- Over the guide while it shows above the keyboard, else over the keyboard itself.
@@ -1968,59 +1963,69 @@ Paint = function()
     -- Under the lesson's lines a row of its own for the skip reminder, with a little air between.
     local row = S.lesson and size + 10 or 0
     local said = kb.hint:GetText() ~= nil
-    -- In a box like the button guide's (the settings' Hint box): bare, the lines were hard to read over the
-    -- action bars under a keyboard by chat (2026-11-23). Off: the bare lines, the lesson's on their dark strip.
+    -- In a box like the button guide's (the settings' Hint box), only while there is something to say, and over
+    -- the keyboard when it is low on the screen, as the lesson's lines are: under a keyboard by chat the lines,
+    -- bare or boxed, stood over the action bars (2026-11-23). Off: the bare lines under the keyboard, the lesson's
+    -- over it on their dark strip.
     local boxed = not ns.profile.hintBoxOff
+    local low = (kb:GetTop() or 0) * kb:GetEffectiveScale() < UIParent:GetHeight() * UIParent:GetEffectiveScale() * 0.7
+    -- over the keyboard: clear of the guide when it stands there, and of the stick press reminders
+    local clear = 4
+    if kb.toggle.over == kb.guide then clear = clear + kb.guide:GetHeight() + 4 end
+    if not ns.profile.stickTipsOff then clear = clear + TOGGLE_GAP + (kb.toggle.two and 36 or 18) end
     local lift = false
-    if S.lesson and (kb:GetTop() or 0) * kb:GetEffectiveScale() < UIParent:GetHeight() * UIParent:GetEffectiveScale() * 0.7 then
-        lift = 14
-        if kb.toggle.over == kb.guide then lift = lift + kb.guide:GetHeight() + 4 end
-        if not ns.profile.stickTipsOff then lift = lift + TOGGLE_GAP + (kb.toggle.two and 36 or 18) end
-        lift = lift + row
+    if S.lesson and low then
+        lift = clear + 10 + row
         -- the box's edge further out than the strip's
         if boxed then lift = lift + HINT_PAD - 7 end
     end
-    local place = tostring(lift) .. (boxed and " boxed" or "")
+    -- Any other line boxed: the box by the keyboard as wide as it, the lines across its middle.
+    local alone = boxed and not S.lesson
+    -- Under the button bar when that hangs on the keyboard (a box with no footer of the game's to stand in for).
+    -- The bar keeps the screen's scale, the hint the keyboard's: the bar's height in the hint's.
+    local drop = 4
+    if box and not box.chatFrame and not kb.barOver and kb.bar:IsShown() then
+        drop = kb.bar:GetHeight() * kb.bar:GetEffectiveScale() / kb:GetEffectiveScale() + 6
+    end
+    local place = ("%s %s %s %s %s"):format(tostring(lift), tostring(boxed), tostring(alone and low), clear, drop)
     if kb.hintPlace ~= place then
         kb.hintPlace = place
         kb.hint:ClearAllPoints()
         kb.hintBox:ClearAllPoints()
-        if lift then
+        if alone then
+            if low then
+                kb.hintBox:SetPoint("BOTTOMLEFT", kb, "TOPLEFT", 0, clear)
+                kb.hintBox:SetPoint("BOTTOMRIGHT", kb, "TOPRIGHT", 0, clear)
+            else
+                kb.hintBox:SetPoint("TOPLEFT", kb, "BOTTOMLEFT", 0, -drop)
+                kb.hintBox:SetPoint("TOPRIGHT", kb, "BOTTOMRIGHT", 0, -drop)
+            end
+            kb.hint:SetPoint("LEFT", kb.hintBox, "LEFT", HINT_PAD, 0)
+            kb.hint:SetPoint("RIGHT", kb.hintBox, "RIGHT", -HINT_PAD, 0)
+        elseif lift then
             -- as wide as over the wide shape, whatever the shape (centred): the lesson's lines break the same
             local out = (kb.wideW - kb.baseW) / 2
             kb.hint:SetPoint("BOTTOMLEFT", kb, "TOPLEFT", 14 - out, lift)
             kb.hint:SetPoint("BOTTOMRIGHT", kb, "TOPRIGHT", out - 14, lift)
         else
-            -- Under the button bar when that hangs on the keyboard (a box with no footer of the game's to stand
-            -- in for). The bar keeps the screen's scale, the hint the keyboard's: the bar's height in the hint's.
-            local drop = 4
-            if box and not box.chatFrame and not kb.barOver and kb.bar:IsShown() then
-                drop = kb.bar:GetHeight() * kb.bar:GetEffectiveScale() / kb:GetEffectiveScale() + 6
-            end
-            if boxed then
-                -- the box as wide as the keyboard, the lines across its middle
-                kb.hintBox:SetPoint("TOPLEFT", kb, "BOTTOMLEFT", 0, -drop)
-                kb.hintBox:SetPoint("TOPRIGHT", kb, "BOTTOMRIGHT", 0, -drop)
-                kb.hint:SetPoint("LEFT", kb.hintBox, "LEFT", HINT_PAD, 0)
-                kb.hint:SetPoint("RIGHT", kb.hintBox, "RIGHT", -HINT_PAD, 0)
-            else
-                kb.hint:SetPoint("TOPLEFT", kb, "BOTTOMLEFT", 6, -drop)
-                kb.hint:SetPoint("TOPRIGHT", kb, "BOTTOMRIGHT", -6, -drop)
-            end
+            kb.hint:SetPoint("TOPLEFT", kb, "BOTTOMLEFT", 6, -drop)
+            kb.hint:SetPoint("TOPRIGHT", kb, "BOTTOMRIGHT", -6, -drop)
         end
     end
     kb.hintBack:SetPoint("BOTTOMRIGHT", kb.hint, "BOTTOMRIGHT", 8, -7 - row)
     kb.hintBack:SetShown(lift ~= false and said and not boxed)
-    kb.hintBox:SetShown(boxed and said)
-    if boxed and said then
+    -- the lesson's lines under a keyboard high on the screen stay bare, as before
+    local inBox = said and boxed and (alone or lift ~= false)
+    kb.hintBox:SetShown(inBox)
+    if inBox then
         -- the lines over the box, whatever moved its level
         kb.hintLayer:SetFrameLevel(kb.hintBox:GetFrameLevel() + 1)
-        if lift then
-            kb.hintBox:SetPoint("BOTTOMRIGHT", kb.hint, "BOTTOMRIGHT", HINT_PAD, -HINT_PAD - row)
-        else
+        if alone then
             -- never lower than its border's two corners, which would cross
             local corner = kb.hintBox.TopLeftCorner
             kb.hintBox:SetHeight(math.max(corner and 2 * corner:GetHeight() or 0, kb.hint:GetStringHeight() + 2 * HINT_PAD))
+        else
+            kb.hintBox:SetPoint("BOTTOMRIGHT", kb.hint, "BOTTOMRIGHT", HINT_PAD, -HINT_PAD - row)
         end
     end
     if kb.skipSize ~= size then
@@ -2051,7 +2056,7 @@ Paint = function()
     end
     kb.hintGoal:SetText(goal)
     kb.hintBack:SetPoint("TOPLEFT", kb.hint, "TOPLEFT", -8, 7 + (goal ~= "" and size + 14 or 0))
-    if boxed and said and lift then
+    if inBox and not alone then
         kb.hintBox:SetPoint("TOPLEFT", kb.hint, "TOPLEFT", -HINT_PAD, HINT_PAD + (goal ~= "" and size + 14 or 0))
     end
     Layout()
@@ -2362,7 +2367,10 @@ PlaceGuide = function()
     -- plus how far the player carried it (the settings' Button guide place)
     local x, y = ns.profile.guideX or 0, ns.profile.guideY or 0
     if kb.guideCorner then
-        kb.guide:SetPoint("TOPLEFT", legend, "TOPLEFT", x, y)
+        -- The game's box holds three rows: a row more grows up from it, clear of chat's tabs under it (clamped to
+        -- the screen, it comes down again only where there is no room above).
+        local more = GUIDE_ROW * (math.max(#COLUMNS[1], #COLUMNS[2]) - 3)
+        kb.guide:SetPoint("TOPLEFT", legend, "TOPLEFT", x, y + more)
         StepAside(legend, LEGEND_OWNER)
     elseif kb.guideOverChat then
         local name = chat:GetName()

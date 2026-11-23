@@ -288,8 +288,6 @@ end
 assert(loaded >= 5, "the toc lists too few files")
 ns.events.scripts.OnEvent(ns.events, "ADDON_LOADED", "FlickChat")
 ns.db.lessonDone = true
--- the hint line's tip for the R3 hold has checks of its own
-ns.db.uses.move = 3
 
 local function Open()
     box.text = ""
@@ -840,9 +838,9 @@ Type("hello")
 line = box.text
 lastTick = nil
 Down("PADBACK")
-local held = lastTick
+local viewHold = lastTick
 padDown[5] = true
-held()
+viewHold()
 Is("View held: LB clicks the tab before the shown one", overrides.PADLSHOULDER == "FlickChatTabPrev"
     and _G.FlickChatTabPrev.attrs.clickbutton == _G.ChatFrame1Tab, true)
 Is("and RB the one after it", overrides.PADRSHOULDER == "FlickChatTabNext"
@@ -860,9 +858,9 @@ Is("after a flip the new tab's typing line opens", opened, true)
 Is("and LB now clicks the tab it came from, RB nothing past the last", _G.FlickChatTabPrev.attrs.clickbutton == _G.ChatFrame2Tab
     and _G.FlickChatTabNext.attrs.clickbutton == nil, true)
 padDown[10] = true
-held()
+viewHold()
 padDown[10], padDown[5] = nil, nil
-held()
+viewHold()
 Up("PADBACK")
 Is("let go, the bumpers are the game's again", overrides.PADLSHOULDER == nil and overrides.PADRSHOULDER == nil, true)
 Is("a bumper used, the line stays", box.text, line)
@@ -885,7 +883,8 @@ Is("and bring them back", marks.shown, true)
 -- R3 held: the sticks move and size the keyboard from where it is; a tap hides or shows the hints as before (players
 -- did not find the settings' Keyboard place and size, 2026-11-23)
 do
-    Has("R3's label says a hold moves the keyboard", kb.toggle.label:GetText(), "(hold: move)")
+    Has("the button guide says a hold of R3 moves the keyboard", kb.prompts.PADRSTICK.label:GetText(), "move keyboard")
+    Is("R3's own label leaves it to the guide", kb.toggle.label:GetText():find("hold", 1, true), nil)
     local x0, size0 = ns.profile.moveX, ns.profile.size
     kb.GetLeft = function() return ns.profile.moveX or 0 end
     local function Push()
@@ -925,34 +924,40 @@ do
     Is("and the keyboard still open", kb:IsShown(), true)
     Press("PADRSTICK")
     Is("a tap still hides the hints", marks.shown, false)
+    Has("with the guide away, R3's label says the hold", kb.toggle.label:GetText(), "(hold: move)")
     Press("PADRSTICK")
     Is("and shows them", marks.shown, true)
     kb.GetLeft = nil
     ns.profile.moveX, ns.profile.moveY, ns.profile.size = x0, nil, size0
 end
 
--- The hint lines in a box like the button guide's (the settings' Hint box, on unless turned off), and the hold told
--- on that line until the player has used it (2026-11-23: bare lines were hard to read over the action bars, and
--- nothing he saw told of the hold).
+-- The hint lines in a box like the button guide's (the settings' Hint box, on unless turned off), only while there
+-- is something to say, and over a keyboard low on the screen (2026-11-23: under it the lines, bare or boxed, stood
+-- over the action bars).
 do
     local uses = ns.db.uses
     local was = { move = uses.move, flick = uses.flick, take = uses.take }
     uses.move, uses.flick, uses.take = 0, 99, 99
     Press("PADRSTICK")
     Press("PADRSTICK")
-    Has("the hint line tells of the hold", Told(), "to move or size the keyboard")
+    Is("nothing to say: no box", Told() == "" and not kb.hintBox:IsShown(), true)
+    -- where the box goes, as asked of the game
+    local points = {}
+    kb.hintBox.SetPoint = function(_, point, _, relative) points[#points + 1] = point .. " on " .. relative end
+    kb.hintPlace = nil
+    Down("PADRSTICK")
+    lastTick = nil
+    timers[#timers].fn()
+    Has("a move: what to do, in a box", Told(), "move the keyboard")
     Is("in a box", kb.hintBox:IsShown(), true)
+    Is("over a keyboard low on the screen, clear of the action bars under it", table.concat(points, ", "),
+        "BOTTOMLEFT on TOPLEFT, BOTTOMRIGHT on TOPRIGHT")
+    kb.hintBox.SetPoint = nil
     Is("never lower than its border's two corners", kb.hintBox:GetHeight() >= 64, true)
     Is("its lines over it", kb.hint.parent, kb.hintLayer)
-    for _ = 1, 3 do
-        Down("PADRSTICK")
-        lastTick = nil
-        timers[#timers].fn()
-        Up("PADRSTICK")
-        Press("PAD2")
-    end
-    Is("held three times, the line says it no more", (Told():find("move or size", 1, true)), nil)
-    Has("R3's label still does", kb.toggle.label:GetText(), "(hold: move)")
+    Up("PADRSTICK")
+    Press("PAD2")
+    Is("the move put back, the box goes", kb.hintBox:IsShown(), false)
     Is("Hint box is a setting", ns.optionRows.hintBox[1](), true)
     ns.optionRows.hintBox[2](false)
     Down("PADRSTICK")
@@ -1240,20 +1245,20 @@ local was = ns.profile.lowercase
 own.scripts.OnGamePadButtonDown(own, "PAD1")
 Is("A flips the first box", ns.profile.lowercase == true, not was)
 own.scripts.OnGamePadButtonDown(own, "PAD1")
-local size = ns.profile.size
+local sizeWas = ns.profile.size
 for _ = 1, 8 do own.scripts.OnGamePadButtonDown(own, "PADDDOWN") end
 own.scripts.OnGamePadButtonDown(own, "PADDRIGHT")
-Is("d-pad down to the size, right adds to it", ns.profile.size, size + 5)
+Is("d-pad down to the size, right adds to it", ns.profile.size, sizeWas + 5)
 own.scripts.OnGamePadButtonDown(own, "PADDLEFT")
 -- the keyboard's background under the size, then the text's own size, each leaving the size as it is
 own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
 own.scripts.OnGamePadButtonDown(own, "PADDLEFT")
 Is("the background is the next row: left fades it", ns.profile.backOpacity == 95 and kb.back.alpha == 0.95
-    and ns.profile.size == size, true)
+    and ns.profile.size == sizeWas, true)
 own.scripts.OnGamePadButtonDown(own, "PADDRIGHT")
 own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
 own.scripts.OnGamePadButtonDown(own, "PADDRIGHT")
-Is("the text size is the row under it, apart from the keyboard's size", ns.profile.textSize == 105 and ns.profile.size == size, true)
+Is("the text size is the row under it, apart from the keyboard's size", ns.profile.textSize == 105 and ns.profile.size == sizeWas, true)
 own.scripts.OnGamePadButtonDown(own, "PADDLEFT")
 -- the shape under that; stacked, the word room row under it says why it changes nothing
 own.scripts.OnGamePadButtonDown(own, "PADDDOWN")
