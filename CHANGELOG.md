@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.10.0] - 2026-11-23
+
+### Added
+- Move the keyboard without the settings: hold the right stick in while the keyboard is open, then move it with the left stick and size it with the right stick. A or the right stick in again keeps the new place, B puts it back, and Y returns it to the place and size it came with. The button guide shows the hold on its last row, Hold: move keyboard.
+- The hint lines on the keyboard now sit in a box like the button guide's, only while there is something to say. Over a keyboard low on the screen the box stands above it, clear of the button guide, so the lines no longer run over the action bars. Show the hint lines in a box like the button guide, in the settings, turns the box off for the bare lines as before.
+
+### Changed
+- A tap of the right stick still hides or shows the hints, now when you let go of it.
+- Fewer chat lines: saving a phrase, copying, resetting or deleting a profile, forgetting a word, finishing the lesson and keeping a moved keyboard no longer print a line in chat. Default cannot be deleted, a channel that could not be joined and an auction house still busy with the last search show in the game's red error text instead.
+- How to have a forgotten word back, by spelling it in exact letters, is now in the tip of Words you forgot in the settings.
+- An unsent message that comes back when chat opens again no longer has a line about it on the keyboard.
+
 ## [1.9.0] - 2026-11-22
 
 ### Added
