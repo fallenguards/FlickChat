@@ -8,7 +8,7 @@
 
 ### Changed
 - A tap of the right stick still hides or shows the hints, now when you let go of it.
-- Fewer chat lines: saving a phrase, copying, resetting or deleting a profile, forgetting a word, finishing the lesson and keeping a moved keyboard no longer print a line in chat. Default cannot be deleted, a channel that could not be joined and an auction house still busy with the last search show in the game's red error text instead.
+- Saving a phrase, copying, resetting or deleting a profile, forgetting a word, finishing the lesson and keeping a moved keyboard no longer print anything in chat. Default cannot be deleted, a channel that could not be joined and an auction house still busy with the last search show in the game's red error text instead.
 - How to have a forgotten word back, by spelling it in exact letters, is now in the tip of Words you forgot in the settings.
 - An unsent message that comes back when chat opens again no longer has a line about it on the keyboard.
 
