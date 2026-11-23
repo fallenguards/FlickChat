@@ -8,7 +8,7 @@ While you type, hold View and push the right stick to scroll the chat, or press 
 
 Hold A and flick to say a quick phrase, and save your own over them. The settings have profiles: a character can have its own, for roleplay phrases or a different keyboard size, or share one with others.
 
-To move the keyboard, hold the right stick in while it is open: the left stick moves it, the right stick sizes it, and A keeps it. Keyboard shape in the settings stacks the guessed words with the letters, on top or below, for a narrower keyboard.
+To move the keyboard, hold the right stick in while it is open: the left stick moves it, the right stick sizes it, and A or the right stick in again keeps it. Keyboard shape in the settings stacks the guessed words with the letters, on top or below, for a narrower keyboard.
 
 It guesses words in English, Spanish, Portuguese, French, German, Italian and Russian. It follows your game's language, and Typing language in the settings picks another.
 

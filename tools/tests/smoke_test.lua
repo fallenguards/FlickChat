@@ -923,6 +923,22 @@ do
     Press("PAD2")
     Is("held again, then B: back where it was", T.state.move == nil and ns.profile.moveX == kept, true)
     Is("and the keyboard still open", kb:IsShown(), true)
+    -- R3 again keeps the new place, as A does (players would hold it again to set it, 2026-11-23)
+    Down("PADRSTICK")
+    lastTick = nil
+    timers[#timers].fn()
+    Up("PADRSTICK")
+    Has("the move's line names R3 with A", Told(), "[PAD1] or [PADRSTICK] keeps it")
+    Has("and the guide's R3 row says it", kb.prompts.PADRSTICK.label:GetText(), "Save")
+    Push()
+    local carried, waiting = ns.profile.moveX, #timers
+    Down("PADRSTICK")
+    Is("R3 pressed again keeps it there", T.state.move == nil and ns.profile.moveX == carried and carried > kept, true)
+    Is("held on, no new move waits", #timers, waiting)
+    Up("PADRSTICK")
+    Is("let go, the hints as they were", marks.shown, true)
+    Has("and the guide's row back to the hold", kb.prompts.PADRSTICK.label:GetText(), "move keyboard")
+    ns.profile.moveX = kept
     Press("PADRSTICK")
     Is("a tap still hides the hints", marks.shown, false)
     Has("with the guide away, R3's label says the hold", kb.toggle.label:GetText(), "(hold: move)")

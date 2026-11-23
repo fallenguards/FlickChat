@@ -597,7 +597,9 @@ end
 
 function Move.Press(button)
     local db, move = ns.profile, S.move
-    if button == "PAD1" then
+    -- R3 keeps it as A does: a move held into with R3 is ended with it again (his ask, 2026-11-23). On its
+    -- press, so a hold keeps it at once and starts nothing new.
+    if button == "PAD1" or button == "PADRSTICK" then
         Move.End()
     elseif button == "PAD2" or button == "PAD4" then
         local back = button == "PAD2"
@@ -1681,7 +1683,10 @@ end
 local function Hint()
     if S.lesson then return LessonText() end
     if S.wheel then return "" end
-    if S.move then return L[S.move.guide and "HINT_MOVE_GUIDE" or "HINT_MOVE"]:format(Glyph("PAD1"), Glyph("PAD2"), Glyph("PAD4")) end
+    if S.move then
+        return L[S.move.guide and "HINT_MOVE_GUIDE" or "HINT_MOVE"]:format(Glyph("PAD1"), Glyph("PADRSTICK"), Glyph("PAD2"),
+            Glyph("PAD4"))
+    end
     if S.forget then return L["FORGET_ASK"]:format(ns.Lower(S.forget), Glyph("PAD1")) end
     if S.phrases then
         if S.phraseSave then return L["HINT_PHRASE_SAVE"]:format(Glyph("PADLTRIGGER")) end
@@ -1728,7 +1733,7 @@ local function Labels()
     local upNext = S.flicks ~= "" and #S.stems >= 2 and S.stems[S.shown % #S.stems + 1]
     labels.PADRSHOULDER = upNext and L["NEXT_IS"]:format(Cap(upNext)) or L["NEXT"]
     labels.PADRTRIGGER, labels.CHORD = L["KEEP"], L["SLASH"]
-    labels.PADRSTICK = L["GUIDE_HOLD_MOVE"]
+    labels.PADRSTICK = S.move and L["SAVE"] or L["GUIDE_HOLD_MOVE"]
     labels.PAD4 = S.lesson and L["LESSON_SKIP"] or L["CHANNEL"]
     labels.PAD3 = S.phrases and L["SAVE_PHRASE"] or S.symbols and L["LETTERS"] or L["SYMBOLS"]
     -- In a fight the game lets no addon close chat: B puts the keyboard away and the game's own B closes it.
