@@ -864,6 +864,55 @@ Is("hidden hints hide them", marks.shown, false)
 Press("PADRSTICK")
 Is("and bring them back", marks.shown, true)
 
+-- R3 held: the sticks move and size the keyboard from where it is; a tap hides or shows the hints as before (players
+-- did not find the settings' Keyboard place and size, 2026-11-23)
+do
+    Has("R3's label says a hold moves the keyboard", kb.toggle.label:GetText(), "(hold: move)")
+    local x0, size0 = ns.profile.moveX, ns.profile.size
+    kb.GetLeft = function() return ns.profile.moveX or 0 end
+    local function Push()
+        local tick = lastTick
+        kb.scripts.OnGamePadStick(kb, "Left", 1, 0, 1)
+        now = now + 0.05
+        tick()
+        kb.scripts.OnGamePadStick(kb, "Left", 0, 0, 0)
+    end
+    Down("PADRSTICK")
+    local hold = timers[#timers]
+    Is("held, nothing moves before the hold time", T.state.move, nil)
+    lastTick = nil
+    hold.fn()
+    Is("past it, the sticks move the keyboard", T.state.move ~= nil and not T.state.move.guide, true)
+    Has("the line says how", Told(), "move the keyboard")
+    Up("PADRSTICK")
+    Is("letting go after the hold leaves the hints as they were", marks.shown, true)
+    Is("and the move goes on", T.state.move ~= nil, true)
+    Push()
+    Is("the left stick carries it", (ns.profile.moveX or 0) > (x0 or 0), true)
+    local said, Print = {}, print
+    print = function(line) said[#said + 1] = line end
+    Press("PAD1")
+    print = Print
+    Is("A keeps it there", T.state.move == nil and (ns.profile.moveX or 0) > (x0 or 0), true)
+    Is("and says nothing in chat", #said, 0)
+    Is("the keyboard stays open", kb:IsShown(), true)
+    local kept = ns.profile.moveX
+    Down("PADRSTICK")
+    lastTick = nil
+    timers[#timers].fn()
+    Up("PADRSTICK")
+    Push()
+    Press("PAD2")
+    Is("held again, then B: back where it was", T.state.move == nil and ns.profile.moveX == kept, true)
+    Is("and the keyboard still open", kb:IsShown(), true)
+    Press("PADRSTICK")
+    Is("a tap still hides the hints", marks.shown, false)
+    Press("PADRSTICK")
+    Is("and shows them", marks.shown, true)
+    kb.GetLeft = nil
+    ns.profile.moveX, ns.profile.moveY, ns.profile.size = x0, nil, size0
+end
+
 -- quick phrases: holding A opens their page, up until A is held again, so both sticks are free (2026-11-21)
 local function HoldA()
     Down("PAD1")

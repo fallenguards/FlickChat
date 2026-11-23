@@ -583,6 +583,11 @@ end
 
 ns.StartMove = Move.Start
 
+-- Where a held R3 moves the keyboard: under a chat line, out of the lesson and practice, not already moving.
+function Fit.CanMove()
+    return box ~= nil and box.chatFrame ~= nil and not S.lesson and not ns.practice and not S.move
+end
+
 function Move.Stick(which, x, y, len)
     local move = S.move
     if len < Move.DEAD then x, y = 0, 0 end
@@ -593,7 +598,6 @@ function Move.Press(button)
     local db, move = ns.profile, S.move
     if button == "PAD1" then
         Move.End()
-        ns.Say(L[move.guide and "MOVE_GUIDE_SAVED" or "MOVE_SAVED"])
     elseif button == "PAD2" or button == "PAD4" then
         local back = button == "PAD2"
         db[move.keyX], db[move.keyY] = back and move.x or 0, back and move.y or 0
@@ -923,6 +927,8 @@ local function Reset(text)
     S.guesses, S.stems, S.shown, S.slots, S.undo = {}, {}, 0, {}, nil
     S.autoSpace, S.caps, S.capsLock, S.symbols, S.wheel = false, false, false, false, nil
     S.exact, S.box, S.naming, S.phrases, S.aDown = false, nil, nil, false, false
+    if S.r3Timer then S.r3Timer:Cancel() end
+    S.r3Down, S.r3Timer = false, nil
     S.phraseSave, S.phraseNoText, S.phraseKeep, S.forget = false, false, false, nil
     if S.move then
         S.move.ticker:Cancel()
@@ -1403,8 +1409,14 @@ local function Press(button)
     elseif SLOT_OF[button] then
         TakeSlot(SLOT_OF[button])
     elseif button == "PADRSTICK" then
-        ns.profile.guideOff = not ns.profile.guideOff or nil
-        Paint()
+        -- Tap: the hints hide or show, on letting go. Held: the sticks move and size the keyboard from here on, as
+        -- the settings' Keyboard place and size does at the next open (players did not find that, 2026-11-23).
+        S.r3Down = true
+        if S.r3Timer then S.r3Timer:Cancel() end
+        S.r3Timer = C_Timer.NewTimer(HOLD_DELAY, function()
+            S.r3Timer = nil
+            if S.r3Down and Fit.CanMove() then Move.Start() end
+        end)
     elseif button == "PADLSTICK" then
         Capital()
     elseif button == "PAD3" and (S.aDown or S.phrases) then
@@ -1448,6 +1460,14 @@ local function Unpress(button)
         StopSlotHold()
     elseif button == "PADLTRIGGER" then
         StopHold()
+    elseif button == "PADRSTICK" and S.r3Down then
+        local tapped = S.r3Timer ~= nil
+        if S.r3Timer then S.r3Timer:Cancel() end
+        S.r3Down, S.r3Timer = false, nil
+        if tapped and box then
+            ns.profile.guideOff = not ns.profile.guideOff or nil
+            Paint()
+        end
     elseif button == "PAD1" and S.aDown then
         local tapped = S.aTimer ~= nil
         if S.aTimer then S.aTimer:Cancel() end
@@ -1821,6 +1841,7 @@ local function PaintPrompts()
     local toggle = kb.toggle
     SetIcon(toggle, "PADRSTICK")
     local text = L[ns.profile.guideOff and "HINTS_SHOW" or "HINTS_HIDE"]
+    if Fit.CanMove() then text = L["HOLD_MOVE"]:format(text) end
     if toggle.plain then text = toggle.plain .. " " .. text end
     toggle.label:SetText(text)
     -- Over the guide while it shows above the keyboard, else over the keyboard itself.
