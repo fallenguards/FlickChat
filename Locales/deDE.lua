@@ -84,7 +84,6 @@ L["PRACTICE_DONE"] = "Zeit. %d Wörter pro Minute, %d%% richtig. Dein Bestwert: 
 L["PRACTICE_LIVE"] = "%d Wörter pro Minute   %d%% richtig"
 L["PRACTICE_HINT"] = "Tippe das leuchtende Wort, behalte es, weiter zum nächsten. Die Uhr läuft ab dem ersten Schnipser."
 L["PRACTICE_TITLE"] = "Tippübung"
-L["DRAFT_BACK"] = "Deine ungesendete Nachricht ist wieder da. %s löscht sie."
 L["FORGET_ASK"] = "\"%s\" vergessen? Es wird nicht mehr vorgeschlagen. %s vergisst es, jede andere Taste behält es."
 L["OPT_FORGOT"] = "Vergessene Wörter"
 L["OPT_FORGOT_BUTTON"] = "Wieder vorschlagen"

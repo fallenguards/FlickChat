@@ -80,7 +80,6 @@ ns.EN = {
     PRACTICE_LIVE = "%d words a minute   %d%% right",
     PRACTICE_HINT = "Type the lit word, keep it, on to the next. The clock starts with your first flick.",
     PRACTICE_TITLE = "Typing practice",
-    DRAFT_BACK = "Your unsent message is back. %s clears it.",
     FORGET_ASK = "Forget \"%s\"? It will not be suggested again. %s forgets it, any other button keeps it.",
     OPT_FORGOT = "Words you forgot",
     OPT_FORGOT_BUTTON = "Suggest them again",

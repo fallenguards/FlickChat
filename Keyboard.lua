@@ -405,7 +405,7 @@ end
 
 local function Emit(digit)
     Sync()
-    S.forget, S.draftBack = nil, nil
+    S.forget = nil
     if ns.practice then ns.practice.Flick() end
     if S.aDown and not S.phrases then
         OpenPhrases()
@@ -1367,7 +1367,6 @@ end
 local function Press(button)
     if not box then return end
     Sync()
-    S.draftBack = nil
     if S.move then return Move.Press(button) end
     if S.wheel then return WheelPress(button) end
     if S.forget then
@@ -1683,7 +1682,6 @@ local function Hint()
     if S.lesson then return LessonText() end
     if S.wheel then return "" end
     if S.move then return L[S.move.guide and "HINT_MOVE_GUIDE" or "HINT_MOVE"]:format(Glyph("PAD1"), Glyph("PAD2"), Glyph("PAD4")) end
-    if S.draftBack then return L["DRAFT_BACK"]:format(Glyph("PADBACK")) end
     if S.forget then return L["FORGET_ASK"]:format(ns.Lower(S.forget), Glyph("PAD1")) end
     if S.phrases then
         if S.phraseSave then return L["HINT_PHRASE_SAVE"]:format(Glyph("PADLTRIGGER")) end
@@ -1987,14 +1985,34 @@ Paint = function()
     if box and not box.chatFrame and not kb.barOver and kb.bar:IsShown() then
         drop = kb.bar:GetHeight() * kb.bar:GetEffectiveScale() / kb:GetEffectiveScale() + 6
     end
-    local place = ("%s %s %s %s %s"):format(tostring(lift), tostring(boxed), tostring(alone and low), clear, drop)
+    -- Over the keyboard, clear of the button guide where it reaches over the keyboard's top (its corner box beside
+    -- chat cut into the hint box, 2026-11-23): the box starts past the guide's right edge, or stands over the guide
+    -- when that would leave it too narrow.
+    local inset = 0
+    if alone and low and kb.guide:IsShown() then
+        local k, g = kb:GetEffectiveScale(), kb.guide:GetEffectiveScale()
+        local left, top, width = kb:GetLeft(), kb:GetTop(), kb:GetWidth()
+        local gLeft, gRight, gTop, gBottom = kb.guide:GetLeft(), kb.guide:GetRight(), kb.guide:GetTop(), kb.guide:GetBottom()
+        if left and top and gLeft and gRight and gTop and gBottom then
+            -- the guide in the keyboard's units
+            gLeft, gRight, gTop, gBottom = gLeft * g / k, gRight * g / k, gTop * g / k, gBottom * g / k
+            local boxBottom = top + clear
+            local boxTop = boxBottom + math.max(kb.hintBox:GetHeight() or 0, 64)
+            if gBottom < boxTop and gTop > boxBottom and gRight > left and gLeft < left + width then
+                inset = math.ceil(gRight - left) + 6
+                if inset > width * 0.6 then inset, clear = 0, math.ceil(gTop - top) + 4 end
+            end
+        end
+    end
+    local place = ("%s %s %s %s %s %s"):format(tostring(lift), tostring(boxed), tostring(alone and low), clear, drop,
+        inset)
     if kb.hintPlace ~= place then
         kb.hintPlace = place
         kb.hint:ClearAllPoints()
         kb.hintBox:ClearAllPoints()
         if alone then
             if low then
-                kb.hintBox:SetPoint("BOTTOMLEFT", kb, "TOPLEFT", 0, clear)
+                kb.hintBox:SetPoint("BOTTOMLEFT", kb, "TOPLEFT", inset, clear)
                 kb.hintBox:SetPoint("BOTTOMRIGHT", kb, "TOPRIGHT", 0, clear)
             else
                 kb.hintBox:SetPoint("TOPLEFT", kb, "BOTTOMLEFT", 0, -drop)
@@ -2873,7 +2891,6 @@ local function Open(edit)
     S.openedText = text
     -- A numbers-only box (a price, an amount) opens on the digits.
     if not edit.chatFrame and edit.IsNumeric and edit:IsNumeric() then S.symbols = true end
-    S.draftBack = back or nil
     ns.Restyle()
     kb.bar:ClearAllPoints()
     kb.barCover:Hide()

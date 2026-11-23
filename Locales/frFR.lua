@@ -83,7 +83,6 @@ L["PRACTICE_DONE"] = "Temps. %d mots par minute, %d%% justes. Votre record : %d.
 L["PRACTICE_LIVE"] = "%d mots par minute   %d%% justes"
 L["PRACTICE_HINT"] = "Tapez le mot éclairé, gardez-le, passez au suivant. Le chrono part à votre premier geste."
 L["PRACTICE_TITLE"] = "Entraînement à la frappe"
-L["DRAFT_BACK"] = "Votre message non envoyé est de retour. %s l'efface."
 L["FORGET_ASK"] = "Oublier « %s » ? Il ne sera plus proposé. %s l'oublie, tout autre bouton le garde."
 L["OPT_FORGOT"] = "Mots oubliés"
 L["OPT_FORGOT_BUTTON"] = "Les proposer à nouveau"

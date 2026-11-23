@@ -83,7 +83,6 @@ L["PRACTICE_DONE"] = "Tempo. %d parole al minuto, %d%% giuste. Il tuo record: %d
 L["PRACTICE_LIVE"] = "%d parole al minuto   %d%% giuste"
 L["PRACTICE_HINT"] = "Scrivi la parola illuminata, tienila e passa alla prossima. Il tempo parte al primo movimento."
 L["PRACTICE_TITLE"] = "Pratica di scrittura"
-L["DRAFT_BACK"] = "Il tuo messaggio non inviato è tornato. %s lo cancella."
 L["FORGET_ASK"] = "Dimenticare \"%s\"? Non sarà più suggerita. %s la dimentica, ogni altro tasto la tiene."
 L["OPT_FORGOT"] = "Parole dimenticate"
 L["OPT_FORGOT_BUTTON"] = "Suggeriscile di nuovo"

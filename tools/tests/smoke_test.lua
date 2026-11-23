@@ -776,6 +776,7 @@ Press("PAD2")
 Is("B closes the keyboard", kb.shown, false)
 Open()
 Is("the unsent message is back", box.text, "Anyone ")
+Is("and the hint line says nothing of it (the guide names View's clear)", (Told():find("unsent", 1, true)), nil)
 Press("PADBACK")
 Is("View clears the line", box.text, "")
 
@@ -954,6 +955,22 @@ do
         "BOTTOMLEFT on TOPLEFT, BOTTOMRIGHT on TOPRIGHT")
     kb.hintBox.SetPoint = nil
     Is("never lower than its border's two corners", kb.hintBox:GetHeight() >= 64, true)
+    -- the guide's corner box reaching over the keyboard's left end, as beside chat: the box starts past it
+    local guide = kb.guide
+    guide.GetLeft, guide.GetRight = function() return -400 end, function() return 60 end
+    guide.GetTop, guide.GetBottom = function() return 420 end, function() return 290 end
+    points = {}
+    kb.hintBox.SetPoint = function(_, point, _, _, x, y) points[#points + 1] = point .. " " .. x .. " " .. y end
+    ns.Restyle()
+    Is("the box clear of the guide's right edge, at its height over the keyboard",
+        (points[1] or ""):match("^BOTTOMLEFT 66 ") ~= nil and (points[2] or ""):match("^BOTTOMRIGHT 0 ") ~= nil, true)
+    -- a guide over most of the keyboard (its top 120 over the keyboard's): the box over the guide instead
+    guide.GetRight = function() return 500 end
+    points = {}
+    ns.Restyle()
+    Is("too narrow beside it: over it", points[1], "BOTTOMLEFT 0 124")
+    kb.hintBox.SetPoint, guide.GetLeft, guide.GetRight, guide.GetTop, guide.GetBottom = nil, nil, nil, nil, nil
+    kb.hintPlace = nil
     Is("its lines over it", kb.hint.parent, kb.hintLayer)
     Up("PADRSTICK")
     Press("PAD2")
